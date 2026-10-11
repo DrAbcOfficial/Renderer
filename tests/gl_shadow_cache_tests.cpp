@@ -3,11 +3,13 @@
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include "../src/shadow_cache_gl.h"
+#include "../src/cubemap_shadow_gl.h"
 #include <tiny_obj_loader.h>
 
 #include <chrono>
 #include <cstdio>
 #include <fstream>
+#include <filesystem>
 #include <limits>
 #include <map>
 #include <regex>
@@ -423,6 +425,8 @@ public:
     }
 };
 
+#include "cubemap_shadow_sampling.h"
+
 void Run(Scene& scene)
 {
     const auto initialLights = scene.lights;
@@ -578,9 +582,10 @@ void CheckPolicyBoundaries()
 int main(int argc, char** argv)
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
-    if (argc != 3)
+    const bool sampling = argc == 5 && std::string(argv[3]) == "--sampling";
+    if (argc != 3 && !sampling)
     {
-        std::fprintf(stderr, "Usage: gl_shadow_cache_tests <cs_assault_shadow.obj> <cs_assault_entity.txt>\n");
+        std::fprintf(stderr, "Usage: gl_shadow_cache_tests <cs_assault_shadow.obj> <cs_assault_entity.txt> [--sampling <shader-directory>]\n");
         return 1;
     }
     glfwSetErrorCallback([](int code, const char* message) { std::fprintf(stderr, "GLFW %d: %s\n", code, message); });
@@ -608,9 +613,14 @@ int main(int argc, char** argv)
     int result = 0;
     try
     {
-        CheckPolicyBoundaries();
         Scene scene(argv[1], argv[2]);
-        Run(scene);
+        if (sampling)
+            RunShadowSampling(scene, LoadWorld(argv[1]), argv[4]);
+        else
+        {
+            CheckPolicyBoundaries();
+            Run(scene);
+        }
     }
     catch (const std::exception& error)
     {

@@ -18,6 +18,10 @@ This is a depth regression, not a rendered-game screenshot or FPS benchmark. Its
 small test shaders model linear-distance shadow depth; the GoldSrc ABI, renderer
 hooks, game shaders and deferred-lighting pass are not loaded into this executable.
 
+The separate [`--sampling` mode](cubemap_shadow_sampling.md) reuses the OBJ/light
+fixture for issue #15. That mode compiles the production cubemap sampling shader
+and checks light leaks at the reported position, cube edges and corners.
+
 ## Run
 
 The test is registered when `RENDERER_BUILD_TESTS=ON`. In the aggregator workspace:

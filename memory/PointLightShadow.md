@@ -88,3 +88,12 @@ M --> N["CalcCubemapShadowIntensity"]
 - `src/gl_rmain.cpp` - `R_PreRenderView` calls `R_RenderShadowMap`
 - `src/gl_shadow.cpp` - the PointLight callback in `R_RenderShadowmapForDynamicLights` generates the cubemap Shadow Map
 - `src/gl_light.cpp` - the PointLight callback in `R_LightShadingPass` samples cubemap shadow
+
+
+## Cubemap face-boundary light leaks (Renderer #15, 2026-10-11)
+
+- Trigger: thin diagonal white lines on the cs_assault vent interior from camera (-143,2468,558). The offending point light is (-271,2448,380), radius 512.
+- Root cause: white CLAMP_TO_BORDER depth plus non-seamless linear comparison filtering admits unoccluded border samples at cube-face boundaries. Same-frame replay with zero bias retains the seam; constraining the filtering footprint removes it.
+- Correct approach: src/cubemap_shadow_gl.h owns cube depth texture allocation with CLAMP_TO_EDGE. Its SamplingScope enables GL_TEXTURE_CUBE_MAP_SEAMLESS within R_LightShadingPass and restores the incoming state. Keep spotlight/CSM border handling separate; changing bias is not this fix.
+- Verification: tests/cubemap_shadow_sampling.md documents the real OBJ/entity-file GPU regression. It compiles production sampling GLSL, uses independent CPU ray occlusion, exercises the reported ceiling/wall positions, 476 blocked/lit pairs from 29 fixture lights, all 12 edges / 8 corners, mixed-depth cross-face filtering, static/dynamic layers and PCF on/off. The old implementation failed the ceiling probe (visibility 0.007813 versus 0). Debug CTest 10/10 and both Release shadow suites passed on RTX 5060 / 610.88; Renderer Debug/Release built. Real CS 10210 capture confirms no seam, ClampEdge + seamless during lighting, and restored seamless state after the pass.
+- Scope: point-light cubemap shadow sampling only. Shader bias, 2D/array shadow behavior and cache policy are unchanged. Other GPU vendors remain unverified.
