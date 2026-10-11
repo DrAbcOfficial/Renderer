@@ -1,0 +1,198 @@
+#include "startup_video.h"
+#include <Windows.h>
+#include <cassert>
+#include <cmath>
+#include <cstdio>
+#include <limits>
+
+static void TestCalcDestinationRect()
+{
+    //Fit down
+    const auto down = StartupVideo_CalcDestinationRect(1920, 1080, 640, 480);
+    assert(640 == down.width);
+    assert(360 == down.height);
+    assert(60 == down.y);
+
+    //Fill up, cropped horizontally
+    const auto up = StartupVideo_CalcDestinationRect(320, 180, 640, 480);
+    assert(853 == up.width);
+    assert(480 == up.height);
+    assert(-106 == up.x);
+
+    assert(0 == StartupVideo_CalcDestinationRect(0, 100, 640, 480).width);
+}
+
+static void TestIsFrameDue()
+{
+    assert(!StartupVideo_IsFrameDue(0.2, 0.1));
+    assert(StartupVideo_IsFrameDue(0.2, 0.2));
+    assert(StartupVideo_IsFrameDue(0.2, 1.0));
+
+    assert(!StartupVideo_IsFrameDue(std::numeric_limits<double>::quiet_NaN(), 1.0));
+}
+
+static void TestFrameGetPlaneSize()
+{
+    unsigned char data[128] = {};
+
+    CStartupVideoFrameView frame;
+    frame.width  = 5;
+    frame.height = 3;
+    frame.shiftX = 1;
+    frame.shiftY = 1;
+
+    for (int i = 0; i < 3; ++i)
+    {
+        frame.planes[i]  = data;
+        frame.strides[i] = 8;
+    }
+
+    int width, height;
+
+    assert(frame.GetPlaneSize(1, width, height));
+    assert(3 == width);
+    assert(2 == height);
+
+    frame.strides[1] = -8;
+    assert(frame.GetPlaneSize(1, width, height));
+
+    frame.strides[1] = 2;
+    assert(!frame.GetPlaneSize(1, width, height));
+
+    frame.shiftY = 2;
+    assert(!frame.GetPlaneSize(0, width, height));
+}
+
+static void TestInvalidFilenames()
+{
+    auto decoder = CreateStartupVideoDecoder();
+
+    assert(!decoder->Open(nullptr));
+    assert(!decoder->Open(""));
+    assert("Invalid video filename" == decoder->GetError());
+}
+
+static void TestCorruptVideo()
+{
+    wchar_t tempDirectory[MAX_PATH] = {};
+    wchar_t tempFile[MAX_PATH]      = {};
+
+    assert(GetTempPathW(MAX_PATH, tempDirectory));
+    assert(GetTempFileNameW(tempDirectory, L"rsv", 0, tempFile));
+
+    {
+        FILE* file = _wfopen(tempFile, L"wb");
+        assert(file);
+
+        const unsigned char truncatedWebM[] = {0x1a, 0x45, 0xdf, 0xa3, 0xff};
+        assert(sizeof(truncatedWebM) == fwrite(truncatedWebM, 1, sizeof(truncatedWebM), file));
+
+        fclose(file);
+
+        char path[MAX_PATH * 3] = {};
+        assert(WideCharToMultiByte(CP_UTF8, 0, tempFile, -1, path, sizeof(path), nullptr, nullptr));
+
+        auto corrupt = CreateStartupVideoDecoder();
+        assert(!corrupt->Open(path));
+    }
+
+    assert(DeleteFileW(tempFile));
+}
+
+static void TestDecodeVideo(IStartupVideoDecoder* decoder, const wchar_t* videoPath)
+{
+    char file[4096] = {};
+    assert(WideCharToMultiByte(CP_UTF8, 0, videoPath, -1, file, sizeof(file), nullptr, nullptr));
+
+    assert(decoder->Open(file));
+
+    CStartupVideoFrameView frame;
+    int                    width, height;
+    int                    count    = 0;
+    double                 previous = 0;
+    StartupVideoReadResult result;
+
+    while ((result = decoder->Next(frame)) == StartupVideoReadResult::FrameReady)
+    {
+        assert(frame.width > 0);
+        assert(frame.height > 0);
+        assert(previous <= frame.seconds);
+
+        for (int i = 0; i < 3; ++i)
+        {
+            assert(frame.GetPlaneSize(i, width, height));
+        }
+
+        previous = frame.seconds;
+        ++count;
+    }
+
+    if (result == StartupVideoReadResult::Error)
+        std::fprintf(stderr, "%s\n", decoder->GetError().c_str());
+
+    assert(StartupVideoReadResult::End == result);
+    assert(count > 1);
+
+    std::printf("Decoded %d frames, last timestamp %.3f seconds\n", count, previous);
+
+    //An interrupt callback that always fires must abort Open.
+    assert(!decoder->Open(file, [](void*) { return true; }));
+}
+
+static void TestDllSearchPath(const wchar_t* dllPath, const wchar_t* videoPath)
+{
+    const std::wstring path      = dllPath;
+    const auto         separator = path.find_last_of(L"/\\");
+    assert(std::wstring::npos != separator);
+
+    const DWORD  length = GetEnvironmentVariableW(L"PATH", nullptr, 0);
+    std::wstring original(length, L'\0');
+    if (length)
+    {
+        assert(length - 1 == GetEnvironmentVariableW(L"PATH", original.data(), length));
+        original.resize(length - 1);
+    }
+
+    //Reproduce the host's PATH setup before any decoder has loaded Mile.FFmpeg.
+    assert(!GetModuleHandleW(L"Mile.FFmpeg.dll"));
+    const auto searchPath = original + L";" + path.substr(0, separator);
+    assert(SetEnvironmentVariableW(L"PATH", searchPath.c_str()));
+    {
+        auto decoder = CreateStartupVideoDecoder();
+        assert(!decoder->Open("missing-startup-video.webm"));
+        const auto module = GetModuleHandleW(L"Mile.FFmpeg.dll");
+        assert(module && GetProcAddress(module, "avcodec_version"));
+        if (videoPath)
+            TestDecodeVideo(decoder.get(), videoPath);
+    }
+    assert(!GetModuleHandleW(L"Mile.FFmpeg.dll"));
+    TestCorruptVideo();
+    assert(!GetModuleHandleW(L"Mile.FFmpeg.dll"));
+    //Each failed open must release the DLL when the interface is destroyed.
+    for (int i = 0; i < 5; ++i)
+    {
+        {
+            auto failed = CreateStartupVideoDecoder();
+            assert(!failed->Open("missing-startup-video.webm"));
+        }
+        assert(!GetModuleHandleW(L"Mile.FFmpeg.dll"));
+    }
+    assert(SetEnvironmentVariableW(L"PATH", length ? original.c_str() : nullptr));
+}
+
+//argv[1]: path to Mile.FFmpeg.dll (optional)
+//argv[2]: path to a WebM video to decode (optional)
+int wmain(int argc, wchar_t** argv)
+{
+    TestCalcDestinationRect();
+    TestIsFrameDue();
+    TestFrameGetPlaneSize();
+    TestInvalidFilenames();
+
+    if (argc < 2)
+        return 0;
+
+    TestDllSearchPath(argv[1], argc >= 3 ? argv[2] : nullptr);
+
+    std::puts("startup_video_tests passed");
+}

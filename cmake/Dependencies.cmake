@@ -10,6 +10,7 @@ set(TINYOBJLOADER_SOURCE_PATH "$ENV{TINYOBJLOADER_SOURCE_PATH}" CACHE PATH "tiny
 set(CAPSTONE_INCLUDE_DIRS "$ENV{CAPSTONE_INCLUDE_DIRS}" CACHE STRING "External Capstone include directories; empty prefers MetaHook's own capstone fork and otherwise fetches the pinned commit")
 set(SDL2_INCLUDE_DIRS "$ENV{SDL2_INCLUDE_DIRS}" CACHE STRING "External include directories containing SDL2/SDL_video.h (required)")
 set(SDL3_INCLUDE_DIRS "$ENV{SDL3_INCLUDE_DIRS}" CACHE STRING "External include directories containing SDL3/SDL.h (optional)")
+include("${CMAKE_CURRENT_LIST_DIR}/MileFFmpeg.cmake")
 
 # Download a pinned dependency into the build tree. Only the source is
 # populated: the caller keeps its add_subdirectory() call so subprojects are
@@ -51,6 +52,9 @@ function(renderer_validate_utilthreadtask_source source)
 endfunction()
 
 function(renderer_prepare_dependencies)
+    renderer_prepare_mile_ffmpeg(mile_ffmpeg_root)
+    set(RENDERER_MILE_FFMPEG_ROOT "${mile_ffmpeg_root}" PARENT_SCOPE)
+    set(RENDERER_MILE_FFMPEG_INCLUDE_DIRS "${mile_ffmpeg_root}/Include" PARENT_SCOPE)
     # Validate explicit paths before doing any downloads. External trees are read-only inputs.
     if(NOT SDL2_INCLUDE_DIRS)
         message(FATAL_ERROR "Set SDL2_INCLUDE_DIRS to the include directory provided by MetaHook's SDL build (containing SDL2/SDL_video.h). Renderer does not fetch or build SDL.")

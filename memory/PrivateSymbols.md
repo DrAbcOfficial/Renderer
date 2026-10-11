@@ -246,7 +246,8 @@ common records (`..._GL_LoadFilterTexture` and `..._R_InitParticleTexture`); the
 | `texture_extension_number` | global | `_HasOfficialGLTexAllocSupport` | presence = legacy allocation; absence = official allocation |
 | `CVideoMode_Common.m_ImageID`, `CVideoMode_Common.m_iBaseResX`, `CVideoMode_Common.m_iBaseResY` | structMember | `_DrawStartupGraphic` | |
 | `CVideoMode_Common_DrawStartupGraphic` | function | `_DrawStartupGraphic` | inline-hooked |
-| `CGame_DrawStartupVideo` | function | `_DrawStartupVideo` | HL25 only; inline hook installed unconditionally |
+| `CGame_DrawStartupVideo` | function | `_DrawStartupVideo` | resolved and inline-hooked only on HL25 |
+| `S_PrecacheSound`, `S_StartDynamicSound`, `S_Update` | function | `R_ResolveStartupVideoSound` | HL25 startup WAV playback; missing symbols skip video without blocking game startup |
 
 ## Client symbols
 

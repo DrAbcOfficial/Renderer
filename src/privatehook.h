@@ -9,6 +9,7 @@
 #include "enginedef.h"
 
 typedef void (*ExtraShaderStageCallback)(GLuint* objs, int* used);
+union SDL_Event;
 
 namespace vgui
 {
@@ -57,6 +58,10 @@ typedef struct
     mleaf_t* (*Mod_PointInLeaf)(vec3_t p, model_t* model);
     void* (*realloc_SvEngine)(void*, size_t);
     void (*S_ExtraUpdate)(void);
+    //Optional HL25 startup video sound entry points.
+    void* (*S_PrecacheSound)(const char*);
+    void (*S_StartDynamicSound)(int, int, void*, float*, float, float, int, int);
+    void (*S_Update)(float*, float*, float*, float*);
     int (*V_FadeAlpha)(void);
     void (*R_ResetLatched)(cl_entity_t* ent, qboolean full_reset);
     //One of CheckMultiTextureExtensions / InitMultitexturing / DT_Initialize, whichever
@@ -194,6 +199,8 @@ typedef struct
     int(__cdecl* SDL_GL_SetAttribute)(int attr, int value);
     void(__cdecl* SDL_GetWindowSize)(void* window, int* w, int* h);
     void(__cdecl* SDL_GL_SwapWindow)(void* window);
+    int(__cdecl* SDL_PollEvent)(SDL_Event* event);
+    void(__cdecl* SDL_GL_GetDrawableSize)(void* window, int* w, int* h);
     void*(__cdecl* SDL_GL_GetProcAddress)(const char* proc);
     void*(__cdecl* SDL_CreateWindow)(const char* title, int x, int y, int w, int h, uint32_t flags);
     int(__cdecl* SDL_GL_ExtensionSupported)(const char* extension);

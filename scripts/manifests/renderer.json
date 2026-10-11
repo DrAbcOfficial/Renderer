@@ -333,7 +333,10 @@
         "hl-10210"
       ],
       "symbols": {
-        "CGame_DrawStartupVideo": "function"
+        "CGame_DrawStartupVideo": "function",
+        "S_PrecacheSound": "function",
+        "S_StartDynamicSound": "function",
+        "S_Update": "function"
       }
     },
     {

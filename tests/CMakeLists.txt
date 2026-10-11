@@ -26,7 +26,7 @@ if(NOT TARGET glfw)
     add_subdirectory("${GLFW_SOURCE_PATH}" "${CMAKE_CURRENT_BINARY_DIR}/glfw" EXCLUDE_FROM_ALL)
 endif()
 
-foreach(test studio_model_validation_tests studio_model_load_tests ringbuffer_tests sc_client_tests)
+foreach(test studio_model_validation_tests studio_model_load_tests ringbuffer_tests sc_client_tests graphic_engine_initialization_tests)
     add_executable(${test} "${CMAKE_CURRENT_SOURCE_DIR}/${test}.cpp")
     target_link_libraries(${test} PRIVATE renderer_settings)
     # These tests include production translation units and discard unused handlers.
@@ -57,3 +57,17 @@ add_test(NAME gl_shadow_cache_tests COMMAND gl_shadow_cache_tests
     "${PROJECT_SOURCE_DIR}/assets/cstrike/maps/cs_assault_shadow.obj"
     "${PROJECT_SOURCE_DIR}/assets/cstrike/maps/cs_assault_entity.txt")
 set_tests_properties(gl_shadow_cache_tests PROPERTIES SKIP_RETURN_CODE 2 TIMEOUT 180)
+
+add_executable(startup_video_tests startup_video_tests.cpp ../src/startup_video.cpp)
+target_link_libraries(startup_video_tests PRIVATE renderer_settings)
+target_compile_options(startup_video_tests PRIVATE /UNDEBUG)
+add_test(NAME startup_video_tests COMMAND startup_video_tests
+    "${RENDERER_MILE_FFMPEG_ROOT}/Redist/x86/Mile.FFmpeg.dll")
+
+add_executable(startup_video_gl_tests startup_video_gl_tests.cpp
+    ../src/startup_video.cpp ../src/startup_video_gl.cpp)
+target_compile_definitions(startup_video_gl_tests PRIVATE GLFW_INCLUDE_NONE)
+target_compile_options(startup_video_gl_tests PRIVATE /UNDEBUG)
+target_link_libraries(startup_video_gl_tests PRIVATE renderer_settings libglew_static glfw)
+add_test(NAME startup_video_gl_tests COMMAND startup_video_gl_tests)
+set_tests_properties(startup_video_gl_tests PROPERTIES SKIP_RETURN_CODE 2 TIMEOUT 60)
