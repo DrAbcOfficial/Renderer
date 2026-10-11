@@ -374,7 +374,6 @@ void            GL_BuildLightmaps(void);
 void            Host_ClearMemory(qboolean bQuite);
 void __fastcall CVideoMode_Common_DrawStartupGraphic(void* videomode, int dummy, void* window);
 void __fastcall CGame_DrawStartupVideo(void* pgame, int dummy, const char* filename, void* window);
-void            R_ResolveStartupVideoSound(void* engineBase);
 bool            InitializeGraphicEngine(void* window);
 void            LegacyMultiTextureInit();
 void            R_Init(void);

@@ -11,6 +11,10 @@ permalink: renderer/build-and-verification
 
 ## 2026-10-11：HL25 启动视频（Issue #699）
 
+- 后续状态管理调整：移除逐帧 GL 状态快照，独占播放阶段显式设置所需状态；
+  析构时解绑视频资源并重置纹理单元与 unpack 布局。x86 Debug/Release 构建和
+  GL 4.4 Core 探针通过，覆盖脏输入状态下的颜色/方向及错误退出后的资源释放。
+  此调整未重新进行实机验收；下方状态恢复测试属于调整前的历史记录。
 - 当前实现使用固定 Mile.FFmpeg 6.1.0.0 SDK，聚合及独立构建共享
   `cmake/MileFFmpeg.cmake`；`MILE_FFMPEG_ROOT` 可覆盖下载路径。
   DLL 和许可证安装到 `svencoop/metahook/dlls/Mile.FFmpeg/`，运行时仅 HL25

@@ -26,12 +26,15 @@ static void TestShaderCompilation()
     assert(GL_NO_ERROR == glGetError());
 }
 
-//Dirty the GL state that CStartupVideoPainter::Draw touches, so the restore can be verified.
+//Video drawing must explicitly establish its state regardless of incoming state.
 static void SetDirtyState()
 {
     glViewport(3, 4, 17, 19);
     glEnable(GL_BLEND);
     glEnable(GL_SCISSOR_TEST);
+    glEnable(GL_RASTERIZER_DISCARD);
+    glColorMaski(0, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
     glScissor(0, 0, 1, 1);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 8);
     glPixelStorei(GL_UNPACK_ROW_LENGTH, 27);
@@ -42,37 +45,11 @@ static void SetDirtyState()
     glDisablei(GL_BLEND, 1);
 }
 
-static void CheckDirtyStateRestored()
+static void CheckVideoState()
 {
-    GLint viewport[4];
-    glGetIntegerv(GL_VIEWPORT, viewport);
-    assert(3 == viewport[0]);
-    assert(4 == viewport[1]);
-    assert(17 == viewport[2]);
-    assert(19 == viewport[3]);
-
-    assert(glIsEnabled(GL_BLEND));
-    assert(glIsEnabled(GL_SCISSOR_TEST));
-
-    GLboolean otherMask[4];
-    glGetBooleani_v(GL_COLOR_WRITEMASK, 1, otherMask);
-    assert(!otherMask[0]);
-    assert(otherMask[1]);
-    assert(!otherMask[2]);
-    assert(otherMask[3]);
-
-    assert(!glIsEnabledi(GL_BLEND, 1));
-
-    GLint value;
-
-    glGetIntegerv(GL_UNPACK_ROW_LENGTH, &value);
-    assert(27 == value);
-
-    glGetIntegerv(GL_UNPACK_SKIP_ROWS, &value);
-    assert(3 == value);
-
-    glGetIntegerv(GL_ACTIVE_TEXTURE, &value);
-    assert(GL_TEXTURE5 == value);
+    assert(!glIsEnabledi(GL_BLEND, 0));
+    assert(!glIsEnabledi(GL_SCISSOR_TEST, 0));
+    assert(!glIsEnabled(GL_RASTERIZER_DISCARD));
 }
 
 //Odd dimensions, padded rows and changing sizes exercise allocation
@@ -126,7 +103,7 @@ static void TestStateAndOrientation(CStartupVideoPainter& painter, GLuint fbo)
             assert(painter.Draw(frame, rect, TargetSize, TargetSize, fbo));
             assert(GL_NO_ERROR == glGetError());
 
-            CheckDirtyStateRestored();
+            CheckVideoState();
 
             unsigned char top[4];
             unsigned char bottom[4];
@@ -215,7 +192,6 @@ int main()
 
     {
         TestShaderCompilation();
-        CStartupVideoPainter painter;
 
         GLuint fbo;
         GLuint color;
@@ -230,8 +206,27 @@ int main()
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, color, 0);
         assert(GL_FRAMEBUFFER_COMPLETE == glCheckFramebufferStatus(GL_FRAMEBUFFER));
 
-        TestStateAndOrientation(painter, fbo);
-        TestColorConversion(painter, fbo);
+        GLint program = 0;
+        {
+            CStartupVideoPainter painter;
+            TestStateAndOrientation(painter, fbo);
+            TestColorConversion(painter, fbo);
+            glGetIntegerv(GL_CURRENT_PROGRAM, &program);
+            assert(0 != program);
+            CStartupVideoFrameView invalidFrame;
+            assert(!painter.Draw(invalidFrame, {0, 0, TargetSize, TargetSize}, TargetSize, TargetSize, fbo));
+        }
+        //The last video program must actually be released, not left current/pending deletion.
+        assert(GL_FALSE == glIsProgram(program));
+        GLint value = -1;
+        glGetIntegerv(GL_CURRENT_PROGRAM, &value);
+        assert(0 == value);
+        glGetIntegerv(GL_ACTIVE_TEXTURE, &value);
+        assert(GL_TEXTURE0 == value);
+        glGetIntegerv(GL_UNPACK_ROW_LENGTH, &value);
+        assert(0 == value);
+        glGetIntegerv(GL_UNPACK_ALIGNMENT, &value);
+        assert(4 == value);
 
         glDeleteFramebuffers(1, &fbo);
         glDeleteTextures(1, &color);

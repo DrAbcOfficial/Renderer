@@ -4,8 +4,9 @@
 #include "startup_video.h"
 
 /*
-    Owns only startup resources; can run before R_Init. Draw restores
-    every state it changes, without touching Renderer's state caches.
+    Owns startup rendering until playback returns; can run before R_Init.
+    Draw explicitly sets its GL state without saving/restoring caller state.
+    Destruction releases video resources and resets bindings and pixel unpack layout.
 */
 class CStartupVideoPainter
 {

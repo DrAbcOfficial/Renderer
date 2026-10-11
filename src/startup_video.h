@@ -1,14 +1,8 @@
 #pragma once
 
-#include <Windows.h>
 #include <cstdint>
 #include <memory>
 #include <string>
-
-struct AVFormatContext;
-struct AVCodecContext;
-struct AVFrame;
-struct AVPacket;
 
 class CStartupVideoRect
 {
@@ -28,7 +22,7 @@ CStartupVideoRect StartupVideo_CalcDestinationRect(int videoWidth, int videoHeig
 bool StartupVideo_IsFrameDue(double frameSeconds, double elapsed);
 
 /*
-    Non-owning view of a decoded frame: planes stay valid only until the next Next() or Close() of the decoder.
+    Non-owning view: planes stay valid until the next Next(), Open(), or decoder destruction.
 */
 class CStartupVideoFrameView
 {
@@ -55,55 +49,22 @@ enum class StartupVideoReadResult
     Error
 };
 
-class CStartupVideoFFmpegAPI;
-
-class CStartupVideoDecoder
+class IStartupVideoDecoder
 {
 public:
-    CStartupVideoDecoder();
-    ~CStartupVideoDecoder();
-
-    CStartupVideoDecoder(const CStartupVideoDecoder&)            = delete;
-    CStartupVideoDecoder& operator=(const CStartupVideoDecoder&) = delete;
+    virtual ~IStartupVideoDecoder() = default;
 
     /*
-        Accepts a DLL name on the host's search path or an explicit path for standalone callers.
+        Opens a video file, loading Mile.FFmpeg.dll through the host's search path.
     */
-    bool Open(const char* dllPath, const char* filename, bool (*interrupt)(void*) = nullptr, void* context = nullptr);
+    virtual bool Open(const char* filename, bool (*interrupt)(void*) = nullptr, void* context = nullptr) = 0;
 
-    StartupVideoReadResult Next(CStartupVideoFrameView& output);
+    virtual StartupVideoReadResult Next(CStartupVideoFrameView& output) = 0;
 
-    const std::string& GetError() const;
+    virtual const std::string& GetError() const = 0;
 
-    int GetWidth() const;
-    int GetHeight() const;
-
-private:
-    void Close();
-    bool Fail(const char* operation, int result = 0);
-    bool IsInterrupted() const;
-
-    static int InterruptCallback(void* opaque);
-
-    HMODULE                                 m_hModule{};
-    std::unique_ptr<CStartupVideoFFmpegAPI> m_pAPI;
-
-    AVFormatContext* m_pFormat{};
-    AVCodecContext*  m_pCodec{};
-    AVFrame*         m_pFrame{};
-    AVPacket*        m_pPacket{};
-
-    int  m_StreamIndex{-1};
-    bool m_Draining{};
-    bool m_PacketPending{};
-
-    bool (*m_pfnInterrupt)(void*){};
-    void* m_pInterruptContext{};
-
-    //Reset by Close()
-    int64_t m_FirstTimestamp{};
-    double  m_LastSeconds{};
-    double  m_FrameDuration{};
-
-    std::string m_Error;
+    virtual int GetWidth() const  = 0;
+    virtual int GetHeight() const = 0;
 };
+
+std::unique_ptr<IStartupVideoDecoder> CreateStartupVideoDecoder();

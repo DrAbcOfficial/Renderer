@@ -144,9 +144,47 @@ public:
 #undef DECLARE_API
 };
 
-CStartupVideoDecoder::CStartupVideoDecoder()
+class CStartupVideoDecoder final : public IStartupVideoDecoder
 {
-    Close();
+public:
+    CStartupVideoDecoder() = default;
+    ~CStartupVideoDecoder() override;
+
+    CStartupVideoDecoder(const CStartupVideoDecoder&)            = delete;
+    CStartupVideoDecoder& operator=(const CStartupVideoDecoder&) = delete;
+
+    bool                   Open(const char* filename, bool (*interrupt)(void*), void* context) override;
+    StartupVideoReadResult Next(CStartupVideoFrameView& output) override;
+    const std::string&     GetError() const override;
+    int                    GetWidth() const override;
+    int                    GetHeight() const override;
+
+private:
+    void       Close() noexcept;
+    bool       Fail(const char* operation, int result = 0);
+    bool       IsInterrupted() const;
+    static int InterruptCallback(void* opaque);
+
+    HMODULE                m_hModule{};
+    CStartupVideoFFmpegAPI m_API{};
+    AVFormatContext*       m_pFormat{};
+    AVCodecContext*        m_pCodec{};
+    AVFrame*               m_pFrame{};
+    AVPacket*              m_pPacket{};
+    int                    m_StreamIndex{-1};
+    bool                   m_Draining{};
+    bool                   m_PacketPending{};
+    bool (*m_pfnInterrupt)(void*){};
+    void*       m_pInterruptContext{};
+    int64_t     m_FirstTimestamp{AV_NOPTS_VALUE};
+    double      m_LastSeconds{};
+    double      m_FrameDuration{1.0 / 30.0};
+    std::string m_Error;
+};
+
+std::unique_ptr<IStartupVideoDecoder> CreateStartupVideoDecoder()
+{
+    return std::make_unique<CStartupVideoDecoder>();
 }
 
 CStartupVideoDecoder::~CStartupVideoDecoder()
@@ -154,19 +192,19 @@ CStartupVideoDecoder::~CStartupVideoDecoder()
     Close();
 }
 
-void CStartupVideoDecoder::Close()
+void CStartupVideoDecoder::Close() noexcept
 {
     if (m_pPacket)
-        m_pAPI->av_packet_free(&m_pPacket);
+        m_API.av_packet_free(&m_pPacket);
 
     if (m_pFrame)
-        m_pAPI->av_frame_free(&m_pFrame);
+        m_API.av_frame_free(&m_pFrame);
 
     if (m_pCodec)
-        m_pAPI->avcodec_free_context(&m_pCodec);
+        m_API.avcodec_free_context(&m_pCodec);
 
     if (m_pFormat)
-        m_pAPI->avformat_close_input(&m_pFormat);
+        m_API.avformat_close_input(&m_pFormat);
 
     if (m_hModule)
     {
@@ -174,7 +212,7 @@ void CStartupVideoDecoder::Close()
         m_hModule = nullptr;
     }
 
-    m_pAPI = std::make_unique<CStartupVideoFFmpegAPI>();
+    m_API = {};
 
     m_pPacket = nullptr;
     m_pFrame  = nullptr;
@@ -199,10 +237,10 @@ bool CStartupVideoDecoder::Fail(const char* operation, int result)
 {
     m_Error = operation;
 
-    if (result && m_pAPI->av_strerror)
+    if (result && m_API.av_strerror)
     {
         char text[AV_ERROR_MAX_STRING_SIZE] = {};
-        m_pAPI->av_strerror(result, text, sizeof(text));
+        m_API.av_strerror(result, text, sizeof(text));
 
         m_Error += ": ";
         m_Error += text;
@@ -236,19 +274,20 @@ int CStartupVideoDecoder::GetHeight() const
     return m_pCodec ? m_pCodec->height : 0;
 }
 
-bool CStartupVideoDecoder::Open(const char* dllPath, const char* filename, bool (*interrupt)(void*), void* context)
+bool CStartupVideoDecoder::Open(const char* filename, bool (*interrupt)(void*), void* context)
 {
     Close();
 
-    if (!dllPath || !*dllPath || !filename || !*filename)
-        return Fail("Invalid video or DLL name");
+    if (!filename || !*filename)
+        return Fail("Invalid video filename");
 
-    m_hModule = LoadLibraryA(dllPath);
+    //MetaHook adds metahook/dlls and its subdirectories to PATH before loading plugins.
+    m_hModule = LoadLibraryA("Mile.FFmpeg.dll");
 
     if (!m_hModule)
         return Fail("Cannot load metahook/dlls/Mile.FFmpeg/Mile.FFmpeg.dll");
 
-    auto& api = *m_pAPI;
+    auto& api = m_API;
 
 #define LOAD_API(name)                                                                 \
     api.name = reinterpret_cast<decltype(api.name)>(GetProcAddress(m_hModule, #name)); \
@@ -349,7 +388,7 @@ StartupVideoReadResult CStartupVideoDecoder::Next(CStartupVideoFrameView& output
         return StartupVideoReadResult::Error;
     }
 
-    auto& api = *m_pAPI;
+    auto& api = m_API;
 
     api.av_frame_unref(m_pFrame);
 

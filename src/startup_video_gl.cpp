@@ -52,136 +52,27 @@ void main()
 }
 )glsl";
 
-static constexpr GLenum SavedCapabilities[] = {
-    GL_DEPTH_TEST,
-    GL_CULL_FACE,
-    GL_STENCIL_TEST,
-    GL_RASTERIZER_DISCARD,
-    GL_FRAMEBUFFER_SRGB,
-    GL_COLOR_LOGIC_OP,
-    GL_DITHER,
-};
-
-static constexpr size_t NumSavedCapabilities = sizeof(SavedCapabilities) / sizeof(SavedCapabilities[0]);
-
-//Saves every GL state touched by CStartupVideoPainter::Draw and switches to a clean state,
-//restores them all on destruction.
-class CStartupVideoSavedState
-{
-public:
-    GLboolean enabled[NumSavedCapabilities] = {};
-
-    GLint program;
-    GLint vao;
-    GLint framebuffer;
-    GLint viewport[4];
-    GLint activeTexture;
-    GLint pbo;
-
-    GLint alignment;
-    GLint rowLength;
-    GLint skipRows;
-    GLint skipPixels;
-    GLint polygonMode[2];
-
-    GLint textures[3];
-    GLint samplers[3];
-
-    GLfloat   clearColor[4];
-    GLboolean colorMask[4];
-    GLboolean blend;
-    GLboolean scissor;
-
-    CStartupVideoSavedState()
-    {
-        glGetIntegerv(GL_CURRENT_PROGRAM, &program);
-        glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &vao);
-        glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &framebuffer);
-        glGetIntegerv(GL_VIEWPORT, viewport);
-        glGetIntegerv(GL_ACTIVE_TEXTURE, &activeTexture);
-        glGetIntegerv(GL_PIXEL_UNPACK_BUFFER_BINDING, &pbo);
-        glGetIntegerv(GL_UNPACK_ALIGNMENT, &alignment);
-        glGetIntegerv(GL_UNPACK_ROW_LENGTH, &rowLength);
-        glGetIntegerv(GL_UNPACK_SKIP_ROWS, &skipRows);
-        glGetIntegerv(GL_UNPACK_SKIP_PIXELS, &skipPixels);
-        glGetIntegerv(GL_POLYGON_MODE, polygonMode);
-        glGetFloatv(GL_COLOR_CLEAR_VALUE, clearColor);
-        glGetBooleani_v(GL_COLOR_WRITEMASK, 0, colorMask);
-
-        blend   = glIsEnabledi(GL_BLEND, 0);
-        scissor = glIsEnabledi(GL_SCISSOR_TEST, 0);
-
-        glDisablei(GL_BLEND, 0);
-        glDisablei(GL_SCISSOR_TEST, 0);
-
-        for (int i = 0; i < 3; ++i)
-        {
-            glActiveTexture(GL_TEXTURE0 + i);
-            glGetIntegerv(GL_TEXTURE_BINDING_2D, &textures[i]);
-            glGetIntegeri_v(GL_SAMPLER_BINDING, i, &samplers[i]);
-            glBindSampler(i, 0);
-        }
-
-        for (size_t i = 0; i < NumSavedCapabilities; ++i)
-        {
-            enabled[i] = glIsEnabled(SavedCapabilities[i]);
-            glDisable(SavedCapabilities[i]);
-        }
-
-        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-        glPixelStorei(GL_UNPACK_SKIP_ROWS, 0);
-        glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0);
-        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-        glColorMaski(0, GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-    }
-
-    ~CStartupVideoSavedState()
-    {
-        glUseProgram(program);
-        glBindVertexArray(vao);
-        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, framebuffer);
-        glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
-        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo);
-        glPixelStorei(GL_UNPACK_ALIGNMENT, alignment);
-        glPixelStorei(GL_UNPACK_ROW_LENGTH, rowLength);
-        glPixelStorei(GL_UNPACK_SKIP_ROWS, skipRows);
-        glPixelStorei(GL_UNPACK_SKIP_PIXELS, skipPixels);
-        glPolygonMode(GL_FRONT_AND_BACK, polygonMode[0]);
-        glClearColor(clearColor[0], clearColor[1], clearColor[2], clearColor[3]);
-        glColorMaski(0, colorMask[0], colorMask[1], colorMask[2], colorMask[3]);
-
-        if (blend)
-            glEnablei(GL_BLEND, 0);
-        else
-            glDisablei(GL_BLEND, 0);
-
-        if (scissor)
-            glEnablei(GL_SCISSOR_TEST, 0);
-        else
-            glDisablei(GL_SCISSOR_TEST, 0);
-
-        for (int i = 0; i < 3; ++i)
-        {
-            glActiveTexture(GL_TEXTURE0 + i);
-            glBindTexture(GL_TEXTURE_2D, textures[i]);
-            glBindSampler(i, samplers[i]);
-        }
-
-        glActiveTexture(activeTexture);
-
-        for (size_t i = 0; i < NumSavedCapabilities; ++i)
-        {
-            if (enabled[i])
-                glEnable(SavedCapabilities[i]);
-            else
-                glDisable(SavedCapabilities[i]);
-        }
-    }
-};
-
 CStartupVideoPainter::~CStartupVideoPainter()
 {
+    //Playback owns this phase. Leave neutral bindings and upload layout for startup drawing.
+    if (m_hProgram)
+    {
+        glUseProgram(0);
+        glBindVertexArray(0);
+        for (int i = 0; i < 3; ++i)
+        {
+            glActiveTexture(GL_TEXTURE0 + i);
+            glBindTexture(GL_TEXTURE_2D, 0);
+            glBindSampler(i, 0);
+        }
+        glActiveTexture(GL_TEXTURE0);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+        glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+        glPixelStorei(GL_UNPACK_SKIP_ROWS, 0);
+        glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0);
+    }
     glDeleteTextures(3, m_hTextures);
 
     if (m_hVAO)
@@ -298,15 +189,31 @@ bool CStartupVideoPainter::Draw(const CStartupVideoFrameView& frame, const CStar
         return false;
     }
 
-    CStartupVideoSavedState saved;
-
     if (!Initialize())
         return false;
+
+    //Video playback owns rendering until it returns; explicitly establish each required state.
+    glDisable(GL_DEPTH_TEST);
+    glDisable(GL_CULL_FACE);
+    glDisable(GL_STENCIL_TEST);
+    glDisable(GL_RASTERIZER_DISCARD);
+    glDisable(GL_FRAMEBUFFER_SRGB);
+    glDisable(GL_COLOR_LOGIC_OP);
+    glDisable(GL_DITHER);
+    glDisablei(GL_BLEND, 0);
+    glDisablei(GL_SCISSOR_TEST, 0);
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    glColorMaski(0, GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glPixelStorei(GL_UNPACK_SKIP_ROWS, 0);
+    glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0);
 
     for (int i = 0; i < 3; ++i)
     {
         glActiveTexture(GL_TEXTURE0 + i);
         glBindTexture(GL_TEXTURE_2D, m_hTextures[i]);
+        glBindSampler(i, 0);
 
         const int w = planeWidths[i];
         const int h = planeHeights[i];

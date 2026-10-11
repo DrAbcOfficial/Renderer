@@ -641,7 +641,10 @@ void Engine_FillAddress_DrawStartupVideo(const mh_dll_info_t& DllInfo, const mh_
         return;
 
     gPrivateFuncs.CGame_DrawStartupVideo = (decltype(gPrivateFuncs.CGame_DrawStartupVideo))GamedataResolvePtr(RealDllInfo.ImageBase, "engine", "CGame_DrawStartupVideo", MH_GAMESYMBOL_KIND_FUNCTION);
-    R_ResolveStartupVideoSound(RealDllInfo.ImageBase);
+    //Missing optional playback symbols must not prevent entering the game.
+    gPrivateFuncs.S_PrecacheSound     = (decltype(gPrivateFuncs.S_PrecacheSound))GamedataResolvePtrIfAvailable(RealDllInfo.ImageBase, "engine", "S_PrecacheSound", MH_GAMESYMBOL_KIND_FUNCTION);
+    gPrivateFuncs.S_StartDynamicSound = (decltype(gPrivateFuncs.S_StartDynamicSound))GamedataResolvePtrIfAvailable(RealDllInfo.ImageBase, "engine", "S_StartDynamicSound", MH_GAMESYMBOL_KIND_FUNCTION);
+    gPrivateFuncs.S_Update            = (decltype(gPrivateFuncs.S_Update))GamedataResolvePtrIfAvailable(RealDllInfo.ImageBase, "engine", "S_Update", MH_GAMESYMBOL_KIND_FUNCTION);
 }
 
 void Engine_FillAddress_Draw_Frame(const mh_dll_info_t& DllInfo, const mh_dll_info_t& RealDllInfo)
@@ -919,6 +922,11 @@ void Engine_FillAddress(const mh_dll_info_t& DllInfo, const mh_dll_info_t& RealD
         gPrivateFuncs.SDL_GL_SetAttribute   = (decltype(gPrivateFuncs.SDL_GL_SetAttribute))GetProcAddress(hSDL2, "SDL_GL_SetAttribute");
         gPrivateFuncs.SDL_GetWindowSize     = (decltype(gPrivateFuncs.SDL_GetWindowSize))GetProcAddress(hSDL2, "SDL_GetWindowSize");
         gPrivateFuncs.SDL_GL_SwapWindow     = (decltype(gPrivateFuncs.SDL_GL_SwapWindow))GetProcAddress(hSDL2, "SDL_GL_SwapWindow");
+        if (g_iEngineType == ENGINE_GOLDSRC_HL25)
+        {
+            gPrivateFuncs.SDL_PollEvent          = (decltype(gPrivateFuncs.SDL_PollEvent))GetProcAddress(hSDL2, "SDL_PollEvent");
+            gPrivateFuncs.SDL_GL_GetDrawableSize = (decltype(gPrivateFuncs.SDL_GL_GetDrawableSize))GetProcAddress(hSDL2, "SDL_GL_GetDrawableSize");
+        }
         gPrivateFuncs.SDL_GL_GetProcAddress = (decltype(gPrivateFuncs.SDL_GL_GetProcAddress))GetProcAddress(hSDL2, "SDL_GL_GetProcAddress");
         gPrivateFuncs.SDL_CreateWindow      = (decltype(gPrivateFuncs.SDL_CreateWindow))GetProcAddress(hSDL2, "SDL_CreateWindow");
         //Fuck Sniber

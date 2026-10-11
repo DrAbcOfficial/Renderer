@@ -5,21 +5,6 @@
 #include <cstdio>
 #include <limits>
 
-//CStartupVideoDecoder::Open takes an ANSI DLL path, matching the engine's char paths.
-static std::string AnsiPath(const wchar_t* path)
-{
-    const int count = WideCharToMultiByte(CP_ACP, 0, path, -1, nullptr, 0, nullptr, nullptr);
-    assert(count);
-
-    std::string result(count, '\0');
-    WideCharToMultiByte(CP_ACP, 0, path, -1, result.data(), count, nullptr, nullptr);
-
-    //Strip the null terminator
-    result.resize(count - 1);
-
-    return result;
-}
-
 static void TestCalcDestinationRect()
 {
     //Fit down
@@ -78,23 +63,16 @@ static void TestFrameGetPlaneSize()
     assert(!frame.GetPlaneSize(0, width, height));
 }
 
-static void TestInvalidDllPaths()
+static void TestInvalidFilenames()
 {
-    CStartupVideoDecoder decoder;
+    auto decoder = CreateStartupVideoDecoder();
 
-    assert(!decoder.Open(nullptr, "missing.webm"));
-    assert(!decoder.Open("", "missing.webm"));
-    assert(!decoder.Open("missing-startup-video-decoder.dll", "missing.webm"));
-    assert(!decoder.Open("Z:\\nonexistent\\Mile.FFmpeg.dll", "missing.webm"));
-
-    char systemDirectory[MAX_PATH] = {};
-    assert(GetSystemDirectoryA(systemDirectory, MAX_PATH));
-
-    const std::string wrongDll = std::string(systemDirectory) + "\\kernel32.dll";
-    assert(!decoder.Open(wrongDll.c_str(), "missing.webm"));
+    assert(!decoder->Open(nullptr));
+    assert(!decoder->Open(""));
+    assert("Invalid video filename" == decoder->GetError());
 }
 
-static void TestCorruptVideo(const char* dllPath)
+static void TestCorruptVideo()
 {
     wchar_t tempDirectory[MAX_PATH] = {};
     wchar_t tempFile[MAX_PATH]      = {};
@@ -114,19 +92,19 @@ static void TestCorruptVideo(const char* dllPath)
         char path[MAX_PATH * 3] = {};
         assert(WideCharToMultiByte(CP_UTF8, 0, tempFile, -1, path, sizeof(path), nullptr, nullptr));
 
-        CStartupVideoDecoder corrupt;
-        assert(!corrupt.Open(dllPath, path));
+        auto corrupt = CreateStartupVideoDecoder();
+        assert(!corrupt->Open(path));
     }
 
     assert(DeleteFileW(tempFile));
 }
 
-static void TestDecodeVideo(CStartupVideoDecoder& decoder, const char* dllPath, const wchar_t* videoPath)
+static void TestDecodeVideo(IStartupVideoDecoder* decoder, const wchar_t* videoPath)
 {
     char file[4096] = {};
     assert(WideCharToMultiByte(CP_UTF8, 0, videoPath, -1, file, sizeof(file), nullptr, nullptr));
 
-    assert(decoder.Open(dllPath, file));
+    assert(decoder->Open(file));
 
     CStartupVideoFrameView frame;
     int                    width, height;
@@ -134,7 +112,7 @@ static void TestDecodeVideo(CStartupVideoDecoder& decoder, const char* dllPath, 
     double                 previous = 0;
     StartupVideoReadResult result;
 
-    while ((result = decoder.Next(frame)) == StartupVideoReadResult::FrameReady)
+    while ((result = decoder->Next(frame)) == StartupVideoReadResult::FrameReady)
     {
         assert(frame.width > 0);
         assert(frame.height > 0);
@@ -150,7 +128,7 @@ static void TestDecodeVideo(CStartupVideoDecoder& decoder, const char* dllPath, 
     }
 
     if (result == StartupVideoReadResult::Error)
-        std::fprintf(stderr, "%s\n", decoder.GetError().c_str());
+        std::fprintf(stderr, "%s\n", decoder->GetError().c_str());
 
     assert(StartupVideoReadResult::End == result);
     assert(count > 1);
@@ -158,7 +136,7 @@ static void TestDecodeVideo(CStartupVideoDecoder& decoder, const char* dllPath, 
     std::printf("Decoded %d frames, last timestamp %.3f seconds\n", count, previous);
 
     //An interrupt callback that always fires must abort Open.
-    assert(!decoder.Open(dllPath, file, [](void*) { return true; }));
+    assert(!decoder->Open(file, [](void*) { return true; }));
 }
 
 static void TestDllSearchPath(const wchar_t* dllPath, const wchar_t* videoPath)
@@ -180,14 +158,25 @@ static void TestDllSearchPath(const wchar_t* dllPath, const wchar_t* videoPath)
     const auto searchPath = original + L";" + path.substr(0, separator);
     assert(SetEnvironmentVariableW(L"PATH", searchPath.c_str()));
     {
-        CStartupVideoDecoder decoder;
-        assert(!decoder.Open("Mile.FFmpeg.dll", "missing-startup-video.webm"));
+        auto decoder = CreateStartupVideoDecoder();
+        assert(!decoder->Open("missing-startup-video.webm"));
         const auto module = GetModuleHandleW(L"Mile.FFmpeg.dll");
         assert(module && GetProcAddress(module, "avcodec_version"));
         if (videoPath)
-            TestDecodeVideo(decoder, "Mile.FFmpeg.dll", videoPath);
+            TestDecodeVideo(decoder.get(), videoPath);
     }
     assert(!GetModuleHandleW(L"Mile.FFmpeg.dll"));
+    TestCorruptVideo();
+    assert(!GetModuleHandleW(L"Mile.FFmpeg.dll"));
+    //Each failed open must release the DLL when the interface is destroyed.
+    for (int i = 0; i < 5; ++i)
+    {
+        {
+            auto failed = CreateStartupVideoDecoder();
+            assert(!failed->Open("missing-startup-video.webm"));
+        }
+        assert(!GetModuleHandleW(L"Mile.FFmpeg.dll"));
+    }
     assert(SetEnvironmentVariableW(L"PATH", length ? original.c_str() : nullptr));
 }
 
@@ -198,27 +187,12 @@ int wmain(int argc, wchar_t** argv)
     TestCalcDestinationRect();
     TestIsFrameDue();
     TestFrameGetPlaneSize();
-    TestInvalidDllPaths();
+    TestInvalidFilenames();
 
     if (argc < 2)
         return 0;
 
     TestDllSearchPath(argv[1], argc >= 3 ? argv[2] : nullptr);
-
-    const std::string dllPathAnsi = AnsiPath(argv[1]);
-    const char*       dllPath     = dllPathAnsi.c_str();
-
-    CStartupVideoDecoder decoder;
-    assert(!decoder.Open(dllPath, "missing-startup-video.webm"));
-
-    TestCorruptVideo(dllPath);
-
-    //Repeat failed opens to exercise partial-initialization cleanup and unload.
-    for (int i = 0; i < 5; ++i)
-    {
-        CStartupVideoDecoder failed;
-        assert(!failed.Open(dllPath, "missing-startup-video.webm"));
-    }
 
     std::puts("startup_video_tests passed");
 }
