@@ -1,4 +1,5 @@
 #include "startup_video_gl.h"
+#include "gl_shader_compile.h"
 #include <GLFW/glfw3.h>
 #include <array>
 #include <cassert>
@@ -7,6 +8,23 @@
 #include <vector>
 
 static constexpr int TargetSize = 64;
+
+static void TestShaderCompilation()
+{
+    std::string error;
+    assert(0 == GL_TryCompileShaderObject(GL_VERTEX_SHADER, "#version 330 core\ninvalid shader", error));
+    assert(!error.empty());
+
+    //A failed compilation must not prevent a subsequent valid shader from compiling.
+    GLuint shader = GL_TryCompileShaderObject(GL_VERTEX_SHADER,
+                                              "#version 330 core\nvoid main() { gl_Position = vec4(0.0); }", error);
+    assert(0 != shader);
+    assert(error.empty());
+    assert(GL_TRUE == glIsShader(shader));
+    glDeleteShader(shader);
+    assert(GL_FALSE == glIsShader(shader));
+    assert(GL_NO_ERROR == glGetError());
+}
 
 //Dirty the GL state that CStartupVideoPainter::Draw touches, so the restore can be verified.
 static void SetDirtyState()
@@ -196,6 +214,7 @@ int main()
     }
 
     {
+        TestShaderCompilation();
         CStartupVideoPainter painter;
 
         GLuint fbo;

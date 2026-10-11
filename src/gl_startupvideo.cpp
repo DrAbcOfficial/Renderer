@@ -7,8 +7,6 @@
 #include <chrono>
 #include <exception>
 
-void InitializeGraphicEngine(void* window);
-
 static std::wstring StartupVideo_WidePath(const char* path)
 {
     const int count = MultiByteToWideChar(CP_ACP, 0, path, -1, nullptr, 0);
@@ -149,7 +147,11 @@ private:
             return;
         }
 
-        InitializeGraphicEngine(window);
+        if (!InitializeGraphicEngine(window))
+        {
+            gEngfuncs.Con_Printf("Startup video: graphics initialization unavailable; skipping.\n");
+            return;
+        }
 
         CStartupVideoPainter painter;
         CStartupVideoFrame   frame;

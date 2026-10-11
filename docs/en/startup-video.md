@@ -8,6 +8,19 @@ conversion coefficients and filters the converted RGB image. The original
 Enter, Escape, Space and the close event stop playback. Missing files, missing
 DLL/API, incompatible ABI or decode failures log a diagnostic and skip the video.
 
+Shader object compilation shares `GL_TryCompileShaderObject` with `gl_shader.cpp`.
+It requires only the current GL context and initialized entry points. Scene shaders
+retain fatal error reporting; video shaders return a diagnostic and skip playback.
+The video painter owns its program separately from the global shader table.
+
+Both startup drawing paths call `InitializeGraphicEngine`. Its render-thread guard
+skips an already initialized current context and rejects calls made during
+initialization. Only successful initialization records the context; failure allows
+a retry. `GL_Shutdown` clears the record so a recreated context (even with a reused
+handle) is initialized again. The `gl_log` command hook is installed once per plugin
+lifetime, independently of the context. This guard does not support concurrent GL
+initialization from multiple threads.
+
 ## Dependency and installation
 
 `MILE_FFMPEG_ROOT` accepts an extracted Mile.FFmpeg 6.1.0.0 SDK. Without an override,
@@ -43,6 +56,9 @@ timestamps, missing files/DLLs and cleanup. It accepts the DLL path and optional
 a WebM path to decode a real clip completely, then exercise interruption.
 `startup_video_gl_tests` uses a real OpenGL 4.4 Core context to verify orientation,
 odd dimensions, 420/422/444, negative stride, legacy colors and state restoration.
+It also checks shader compilation diagnostics and successful compilation after a failure.
+`graphic_engine_initialization_tests` checks duplicate calls, reentry, failed attempts,
+context changes and shutdown/reset behavior without requiring a game process.
 No GL-capable driver is reported as a skipped test, not a visual pass.
 
 Real-game acceptance also requires normal playback with sound, all skip keys,

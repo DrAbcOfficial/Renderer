@@ -1,4 +1,5 @@
 #include "startup_video_gl.h"
+#include "gl_shader_compile.h"
 
 static constexpr const char* VertexShader = R"glsl(#version 330 core
 out vec2 texcoord;
@@ -179,30 +180,6 @@ public:
     }
 };
 
-//Returns 0 and fills error with the info log on failure.
-static GLuint StartupVideo_CompileShader(GLenum stage, const char* source, std::string& error)
-{
-    GLuint shader = glCreateShader(stage);
-
-    glShaderSource(shader, 1, &source, nullptr);
-    glCompileShader(shader);
-
-    GLint compiled = 0;
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &compiled);
-
-    if (!compiled)
-    {
-        char log[1024] = {};
-        glGetShaderInfoLog(shader, sizeof(log), nullptr, log);
-        error = log;
-
-        glDeleteShader(shader);
-        return 0;
-    }
-
-    return shader;
-}
-
 CStartupVideoPainter::~CStartupVideoPainter()
 {
     glDeleteTextures(3, m_hTextures);
@@ -228,13 +205,13 @@ bool CStartupVideoPainter::Initialize()
 
     if (ok)
     {
-        vertexShader = StartupVideo_CompileShader(GL_VERTEX_SHADER, VertexShader, m_Error);
+        vertexShader = GL_TryCompileShaderObject(GL_VERTEX_SHADER, VertexShader, m_Error);
         ok           = (vertexShader != 0);
     }
 
     if (ok)
     {
-        fragmentShader = StartupVideo_CompileShader(GL_FRAGMENT_SHADER, FragmentShader, m_Error);
+        fragmentShader = GL_TryCompileShaderObject(GL_FRAGMENT_SHADER, FragmentShader, m_Error);
         ok             = (fragmentShader != 0);
     }
 

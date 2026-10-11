@@ -1,6 +1,8 @@
 #include "gl_local.h"
 #include "gl_common.h"
 #include "gl_startupvideo.h"
+#include "graphic_engine_initialization.h"
+#include <ScopeExit/ScopeExit.h>
 #include "pm_defs.h"
 #include "CounterStrike.h"
 #include <event_api.h>
@@ -5539,6 +5541,8 @@ static PFNWGLCREATECONTEXTATTRIBSARBPROC wglCreateContextAttribsARB{};
 static PFNWGLSWAPBUFFERS                 wglSwapBuffers{};
 static HDC                               g_hDC{};
 static HGLRC                             g_hOpenGLCoreContext{};
+static CGraphicEngineInitialization      s_GraphicEngineInitialization;
+static bool                              s_GLLogHookInstalled{};
 
 void GLAPIENTRY GL_DebugOutputCallback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, const void* userParam)
 {
@@ -5766,107 +5770,162 @@ int __cdecl CoreProfile_SDL_GL_ExtensionSupported(const char* extension)
     return gPrivateFuncs.SDL_GL_ExtensionSupported(extension);
 }
 
-void InitializeGraphicEngine(void* window)
+//State captured by one InitializeGraphicEngine attempt, used to roll back on failure.
+class CGraphicEngineInitAttempt
 {
-    //For non-SDL path with legacy engine
+public:
+    HGLRC previousContext{};
+    HDC   previousDC{};
+    HGLRC previousCoreContext{};
+    HDC   previousCoreDC{};
+
+    //Resources acquired by this attempt
+    HGLRC createdContext{};
+    HDC   acquiredDC{};
+};
+
+/*
+    For non-SDL path with legacy engine: create a temporary context to resolve wglCreateContextAttribsARB,
+    then create the Core Profile context and make it current.
+*/
+static bool GL_CreateLegacyCoreContext(void* window, CGraphicEngineInitAttempt& attempt)
+{
+    g_hDC              = GetDC((HWND)window);
+    attempt.acquiredDC = g_hDC;
+
+    if (!g_hDC)
+    {
+        Sys_Error("InitializeGraphicEngine: GetDC failed!");
+        return false;
+    }
+
+    PIXELFORMATDESCRIPTOR pfd = {
+        sizeof(PIXELFORMATDESCRIPTOR),
+        1,
+        PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER,
+        PFD_TYPE_RGBA,
+        32,
+        0, 0, 0, 0, 0, 0,
+        0,
+        0,
+        0,
+        0, 0, 0, 0,
+        24,
+        8,
+        0,
+        PFD_MAIN_PLANE,
+        0,
+        0, 0, 0};
+
+    int pixelFormat = ChoosePixelFormat(g_hDC, &pfd);
+
+    if (!pixelFormat)
+    {
+        Sys_Error("InitializeGraphicEngine: ChoosePixelFormat failed!");
+        return false;
+    }
+
+    //The pixel format of a window can only be set once.
+    if (!GetPixelFormat(g_hDC) && !SetPixelFormat(g_hDC, pixelFormat, &pfd))
+    {
+        Sys_Error("InitializeGraphicEngine: SetPixelFormat failed!");
+        return false;
+    }
+
+    auto hTempOpenGLContext = wglCreateContext(g_hDC);
+
+    //Release the temporary context on any early return.
+    SCOPE_EXIT
+    {
+        if (hTempOpenGLContext)
+        {
+            if (wglGetCurrentContext() == hTempOpenGLContext)
+                wglMakeCurrent(g_hDC, nullptr);
+
+            wglDeleteContext(hTempOpenGLContext);
+        }
+    };
+
+    if (!hTempOpenGLContext)
+    {
+        Sys_Error("InitializeGraphicEngine: wglCreateContext failed!");
+        return false;
+    }
+
+    if (!wglMakeCurrent(g_hDC, hTempOpenGLContext))
+    {
+        Sys_Error("InitializeGraphicEngine: wglMakeCurrent failed!");
+        return false;
+    }
+
+    wglCreateContextAttribsARB = (decltype(wglCreateContextAttribsARB))wglGetProcAddress("wglCreateContextAttribsARB");
+
+    if (!wglCreateContextAttribsARB)
+    {
+        Sys_Error("InitializeGraphicEngine: wglCreateContextAttribsARB not found!");
+        return false;
+    }
+
+    auto hOpenGL = GetModuleHandleA("OpenGL32.dll");
+
+    if (!hOpenGL)
+    {
+        Sys_Error("InitializeGraphicEngine: OpenGL32.dll not found!");
+        return false;
+    }
+
+    wglSwapBuffers = (decltype(wglSwapBuffers))GetProcAddress(hOpenGL, "wglSwapBuffers");
+
+    if (!wglSwapBuffers)
+    {
+        Sys_Error("InitializeGraphicEngine: wglSwapBuffers not found!");
+        return false;
+    }
+
+    wglMakeCurrent(g_hDC, nullptr);
+
+    wglDeleteContext(hTempOpenGLContext);
+    hTempOpenGLContext = nullptr;
+
+    int contextAttribs[] = {
+        WGL_CONTEXT_MAJOR_VERSION_ARB, 4,
+        WGL_CONTEXT_MINOR_VERSION_ARB, 4,
+        WGL_CONTEXT_PROFILE_MASK_ARB, WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
+        WGL_CONTEXT_FLAGS_ARB, WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB,
+        0};
+
+    g_hOpenGLCoreContext   = wglCreateContextAttribsARB(g_hDC, nullptr, contextAttribs);
+    attempt.createdContext = g_hOpenGLCoreContext;
+
+    if (!g_hOpenGLCoreContext)
+    {
+        Sys_Error("InitializeGraphicEngine: failed to wglCreateContextAttribsARB!");
+        return false;
+    }
+
+    if (!wglMakeCurrent(g_hDC, g_hOpenGLCoreContext))
+    {
+        Sys_Error("InitializeGraphicEngine: failed to make Core context current!");
+        return false;
+    }
+
+    return true;
+}
+
+static bool GL_InitializeGraphicEngine(void* window, CGraphicEngineInitAttempt& attempt)
+{
     if (!gPrivateFuncs.SDL_GL_SetAttribute)
     {
-        g_hDC = GetDC((HWND)window);
-
-        PIXELFORMATDESCRIPTOR pfd = {
-            sizeof(PIXELFORMATDESCRIPTOR),
-            1,
-            PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER,
-            PFD_TYPE_RGBA,
-            32,
-            0, 0, 0, 0, 0, 0,
-            0,
-            0,
-            0,
-            0, 0, 0, 0,
-            24,
-            8,
-            0,
-            PFD_MAIN_PLANE,
-            0,
-            0, 0, 0};
-
-        int pixelFormat = ChoosePixelFormat(g_hDC, &pfd);
-
-        if (!pixelFormat)
-        {
-            Sys_Error("InitializeGraphicEngine: ChoosePixelFormat failed!");
-            return;
-        }
-
-        if (!SetPixelFormat(g_hDC, pixelFormat, &pfd))
-        {
-            Sys_Error("InitializeGraphicEngine: SetPixelFormat failed!");
-            return;
-        }
-
-        auto hTempOpenGLContext = wglCreateContext(g_hDC);
-
-        if (!hTempOpenGLContext)
-        {
-            Sys_Error("InitializeGraphicEngine: wglCreateContext failed!");
-            return;
-        }
-
-        if (!wglMakeCurrent(g_hDC, hTempOpenGLContext))
-        {
-            Sys_Error("InitializeGraphicEngine: wglMakeCurrent failed!");
-            return;
-        }
-
-        wglCreateContextAttribsARB = (decltype(wglCreateContextAttribsARB))wglGetProcAddress("wglCreateContextAttribsARB");
-
-        if (!wglCreateContextAttribsARB)
-        {
-            Sys_Error("InitializeGraphicEngine: wglCreateContextAttribsARB not found!");
-            return;
-        }
-
-        auto hOpenGL = GetModuleHandleA("OpenGL32.dll");
-
-        if (!hOpenGL)
-        {
-            Sys_Error("InitializeGraphicEngine: OpenGL32.dll not found!");
-            return;
-        }
-
-        wglSwapBuffers = (decltype(wglSwapBuffers))GetProcAddress(hOpenGL, "wglSwapBuffers");
-
-        if (!wglSwapBuffers)
-        {
-            Sys_Error("InitializeGraphicEngine: wglSwapBuffers not found!");
-            return;
-        }
-
-        wglMakeCurrent(g_hDC, nullptr);
-
-        wglDeleteContext(hTempOpenGLContext);
-
-        int contextAttribs[] = {
-            WGL_CONTEXT_MAJOR_VERSION_ARB, 4,
-            WGL_CONTEXT_MINOR_VERSION_ARB, 4,
-            WGL_CONTEXT_PROFILE_MASK_ARB, WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
-            WGL_CONTEXT_FLAGS_ARB, WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB,
-            0};
-
-        g_hOpenGLCoreContext = wglCreateContextAttribsARB(g_hDC, nullptr, contextAttribs);
-
-        if (!g_hOpenGLCoreContext)
-        {
-            Sys_Error("InitializeGraphicEngine: failed to wglCreateContextAttribsARB!");
-            return;
-        }
-
-        wglMakeCurrent(g_hDC, g_hOpenGLCoreContext);
+        if (!GL_CreateLegacyCoreContext(window, attempt))
+            return false;
     }
     else
     {
+        //SDL has already created the Core Profile context and made it current.
         g_hOpenGLCoreContext = wglGetCurrentContext();
+
+        if (!g_hOpenGLCoreContext)
+            return false;
     }
 
     auto err = glewInit();
@@ -5874,13 +5933,13 @@ void InitializeGraphicEngine(void* window)
     if (GLEW_OK != err)
     {
         Sys_Error("glewInit failed, %s", glewGetErrorString(err));
-        return;
+        return false;
     }
 
     if (!GLEW_VERSION_4_4)
     {
         Sys_Error("OpenGL 4.4 is not supported!\n");
-        return;
+        return false;
     }
 
     if (gEngfuncs.CheckParm("-gl_debugoutput", NULL))
@@ -5889,7 +5948,67 @@ void InitializeGraphicEngine(void* window)
         glEnable(GL_DEBUG_OUTPUT);
     }
 
-    g_pMetaHookAPI->HookCmd("gl_log", GL_LogOverride);
+    //Hook once per plugin lifetime, independently of the context.
+    if (!s_GLLogHookInstalled)
+    {
+        s_GLLogHookInstalled = (g_pMetaHookAPI->HookCmd("gl_log", GL_LogOverride) != nullptr);
+    }
+
+    return true;
+}
+
+//Release everything acquired by a failed attempt and restore the previous state.
+static void GL_RollbackGraphicEngine(void* window, const CGraphicEngineInitAttempt& attempt)
+{
+    if (attempt.createdContext)
+    {
+        if (wglGetCurrentContext() == attempt.createdContext)
+            wglMakeCurrent(attempt.acquiredDC, nullptr);
+
+        wglDeleteContext(attempt.createdContext);
+    }
+
+    if (attempt.acquiredDC)
+    {
+        wglMakeCurrent(attempt.previousDC, attempt.previousContext);
+        ReleaseDC((HWND)window, attempt.acquiredDC);
+    }
+
+    g_hOpenGLCoreContext = attempt.previousCoreContext;
+    g_hDC                = attempt.previousCoreDC;
+}
+
+/*
+    Called by both the startup graphic and the startup video.
+    Returns true if the context current on this thread is (or has just been) initialized.
+*/
+bool InitializeGraphicEngine(void* window)
+{
+    const auto result = s_GraphicEngineInitialization.Begin(wglGetCurrentContext());
+
+    if (result == GraphicEngineInitialization_Ready)
+        return true;
+
+    if (result == GraphicEngineInitialization_Reentrant)
+        return false;
+
+    SCOPE_EXIT { s_GraphicEngineInitialization.Finish(); };
+
+    CGraphicEngineInitAttempt attempt;
+    attempt.previousContext     = wglGetCurrentContext();
+    attempt.previousDC          = wglGetCurrentDC();
+    attempt.previousCoreContext = g_hOpenGLCoreContext;
+    attempt.previousCoreDC      = g_hDC;
+
+    if (!GL_InitializeGraphicEngine(window, attempt))
+    {
+        GL_RollbackGraphicEngine(window, attempt);
+        return false;
+    }
+
+    s_GraphicEngineInitialization.Complete(g_hOpenGLCoreContext);
+
+    return true;
 }
 
 qboolean GL_SelectPixelFormat(HDC hDC)
@@ -5993,6 +6112,9 @@ void GL_Init(void)
 
 void GL_Shutdown(void* window, HDC pmaindc, HGLRC pbaseRC)
 {
+    //A recreated context (even with a reused handle) must be initialized again.
+    s_GraphicEngineInitialization.Reset();
+
     GL_FreeShaders();
     GL_FreeFrameBuffers();
 
@@ -6000,12 +6122,20 @@ void GL_Shutdown(void* window, HDC pmaindc, HGLRC pbaseRC)
     {
         wglMakeCurrent(pmaindc, nullptr);
         wglDeleteContext(pbaseRC);
+
+        if (g_hDC)
+            ReleaseDC((HWND)window, g_hDC);
+
+        g_hDC = nullptr;
     }
+
+    g_hOpenGLCoreContext = nullptr;
 }
 
 void __fastcall CVideoMode_Common_DrawStartupGraphic(void* pthis, int dummy, void* window)
 {
-    InitializeGraphicEngine(window);
+    if (!InitializeGraphicEngine(window))
+        return;
 
     CUtlVector<bimage_t>* m_ImageID   = (CUtlVector<bimage_t>*)((ULONG_PTR)pthis + gPrivateFuncs.offset_CVideoMode_Common_m_ImageID);
     int                   m_iBaseResX = *(int*)((ULONG_PTR)pthis + gPrivateFuncs.offset_CVideoMode_Common_m_iBaseResX);

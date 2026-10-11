@@ -26,7 +26,7 @@ if(NOT TARGET glfw)
     add_subdirectory("${GLFW_SOURCE_PATH}" "${CMAKE_CURRENT_BINARY_DIR}/glfw" EXCLUDE_FROM_ALL)
 endif()
 
-foreach(test studio_model_validation_tests studio_model_load_tests ringbuffer_tests sc_client_tests)
+foreach(test studio_model_validation_tests studio_model_load_tests ringbuffer_tests sc_client_tests graphic_engine_initialization_tests)
     add_executable(${test} "${CMAKE_CURRENT_SOURCE_DIR}/${test}.cpp")
     target_link_libraries(${test} PRIVATE renderer_settings)
     # These tests include production translation units and discard unused handlers.

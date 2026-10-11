@@ -1,5 +1,6 @@
 #include "gl_local.h"
 #include "gl_shader.h"
+#include "gl_shader_compile.h"
 #include <string>
 #include <sstream>
 #include <regex>
@@ -30,26 +31,6 @@ void GL_FreeShaders(void)
     g_ShaderTable.clear();
 }
 
-void GL_CheckShaderError(GLuint shader, const char* code, const char* filename)
-{
-    int iStatus;
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &iStatus);
-
-    if (GL_FALSE == iStatus)
-    {
-        int nInfoLength = 0;
-        glGetObjectParameterivARB(shader, GL_OBJECT_INFO_LOG_LENGTH_ARB, &nInfoLength);
-
-        std::string info;
-        info.resize(nInfoLength);
-
-        glGetInfoLogARB(shader, nInfoLength, NULL, (char*)info.c_str());
-
-        Sys_Error("Shader %s compiled with error:\n%s", filename, info.c_str());
-        return;
-    }
-}
-
 GLuint R_CompileShaderObject(int type, const char* code, const char* filename)
 {
     if (developer && developer->value >= 255)
@@ -69,13 +50,12 @@ GLuint R_CompileShaderObject(int type, const char* code, const char* filename)
         }
     }
 
-    auto obj = glCreateShader(type);
+    std::string error;
 
-    glShaderSource(obj, 1, &code, NULL);
+    auto obj = GL_TryCompileShaderObject(type, code, error);
 
-    glCompileShader(obj);
-
-    GL_CheckShaderError(obj, code, filename);
+    if (!obj)
+        Sys_Error("Shader %s compiled with error:\n%s", filename, error.c_str());
 
     return obj;
 }
