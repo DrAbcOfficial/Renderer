@@ -58,6 +58,12 @@ add_test(NAME gl_shadow_cache_tests COMMAND gl_shadow_cache_tests
     "${PROJECT_SOURCE_DIR}/assets/cstrike/maps/cs_assault_entity.txt")
 set_tests_properties(gl_shadow_cache_tests PROPERTIES SKIP_RETURN_CODE 2 TIMEOUT 180)
 
+add_test(NAME gl_cubemap_shadow_sampling_tests COMMAND gl_shadow_cache_tests
+    "${PROJECT_SOURCE_DIR}/assets/cstrike/maps/cs_assault_shadow.obj"
+    "${PROJECT_SOURCE_DIR}/assets/cstrike/maps/cs_assault_entity.txt"
+    --sampling "${PROJECT_SOURCE_DIR}/assets/svencoop/renderer/shader")
+set_tests_properties(gl_cubemap_shadow_sampling_tests PROPERTIES SKIP_RETURN_CODE 2 TIMEOUT 180)
+
 add_executable(startup_video_tests startup_video_tests.cpp ../src/startup_video.cpp)
 target_link_libraries(startup_video_tests PRIVATE renderer_settings)
 target_compile_options(startup_video_tests PRIVATE /UNDEBUG)

@@ -1,4 +1,5 @@
 #include "gl_local.h"
+#include "cubemap_shadow_gl.h"
 
 vec3_t save_vieworg[MAX_SAVESTACK] = {0};
 vec3_t save_viewang[MAX_SAVESTACK] = {0};
@@ -348,25 +349,7 @@ GLuint GL_GenShadowTexture(int w, int h, bool immutable)
 
 void GL_CreateCubemapShadowTexture(int texid, int w, int h, bool immutable)
 {
-    glBindTexture(GL_TEXTURE_CUBE_MAP, texid);
-
-    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_BORDER);
-
-    float borderColor[] = {1, 1, 1, 1};
-    glTexParameterfv(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_BORDER_COLOR, borderColor);
-
-    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-
-    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
-
-    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
-
-    glTexStorage2D(GL_TEXTURE_CUBE_MAP, 1, GL_DEPTH32F_STENCIL8, w, h);
-
-    glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+    CubemapShadow::CreateTexture(texid, w, h);
 }
 
 GLuint GL_GenCubemapShadowTexture(int w, int h, bool immutable)

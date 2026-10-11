@@ -1,4 +1,5 @@
 #include "gl_local.h"
+#include "cubemap_shadow_gl.h"
 #include "pm_defs.h"
 #include <sstream>
 
@@ -904,6 +905,7 @@ void R_IterateVisibleDynamicLights(
 
 void R_LightShadingPass(void)
 {
+    const CubemapShadow::SamplingScope shadowSampling;
     GL_BeginDebugGroup("R_LightShadingPass");
 
     //Write to GBuffer->lightmap only whatsoever
