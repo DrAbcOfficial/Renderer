@@ -1,5 +1,6 @@
 #include "gl_local.h"
 #include "gl_common.h"
+#include "gl_startupvideo.h"
 #include "pm_defs.h"
 #include "CounterStrike.h"
 #include <event_api.h>
@@ -6191,6 +6192,14 @@ void __fastcall CVideoMode_Common_DrawStartupGraphic(void* pthis, int dummy, voi
     {
         GL_DeleteTexture(GLStartupTextures[i]);
     }
+}
+
+void __fastcall CGame_DrawStartupVideo(void* pgame, int dummy, const char* filename, void* window)
+{
+    if (g_iEngineType != ENGINE_GOLDSRC_HL25)
+        return;
+
+    StartupVideoPlayer()->Play(filename, window);
 }
 
 void LegacyMultiTextureInit()

@@ -5,9 +5,7 @@
 #include <cstdio>
 #include <limits>
 
-using namespace StartupVideo;
-
-//Decoder::Open takes an ANSI DLL path, matching the engine's char paths.
+//CStartupVideoDecoder::Open takes an ANSI DLL path, matching the engine's char paths.
 static std::string AnsiPath(const wchar_t* path)
 {
     const int count = WideCharToMultiByte(CP_ACP, 0, path, -1, nullptr, 0, nullptr, nullptr);
@@ -22,36 +20,41 @@ static std::string AnsiPath(const wchar_t* path)
     return result;
 }
 
-static void TestDestinationRect()
+static void TestCalcDestination()
 {
     //Fit down
-    const auto down = DestinationRect(1920, 1080, 640, 480);
+    const auto down = CStartupVideoRect::CalcDestination(1920, 1080, 640, 480);
     assert(640 == down.width);
     assert(360 == down.height);
     assert(60 == down.y);
 
     //Fill up, cropped horizontally
-    const auto up = DestinationRect(320, 180, 640, 480);
+    const auto up = CStartupVideoRect::CalcDestination(320, 180, 640, 480);
     assert(853 == up.width);
     assert(480 == up.height);
     assert(-106 == up.x);
 
-    assert(0 == DestinationRect(0, 100, 640, 480).width);
+    assert(0 == CStartupVideoRect::CalcDestination(0, 100, 640, 480).width);
 }
 
-static void TestIsFrameDue()
+static void TestFrameIsDue()
 {
-    assert(!IsFrameDue(0.1, 0.2));
-    assert(IsFrameDue(0.2, 0.2));
-    assert(IsFrameDue(1.0, 0.2));
-    assert(!IsFrameDue(1.0, std::numeric_limits<double>::quiet_NaN()));
+    CStartupVideoFrame frame;
+
+    frame.seconds = 0.2;
+    assert(!frame.IsDue(0.1));
+    assert(frame.IsDue(0.2));
+    assert(frame.IsDue(1.0));
+
+    frame.seconds = std::numeric_limits<double>::quiet_NaN();
+    assert(!frame.IsDue(1.0));
 }
 
-static void TestPlaneSize()
+static void TestFrameGetPlaneSize()
 {
     unsigned char data[128] = {};
 
-    Frame frame;
+    CStartupVideoFrame frame;
     frame.width  = 5;
     frame.height = 3;
     frame.shiftX = 1;
@@ -65,23 +68,23 @@ static void TestPlaneSize()
 
     int width, height;
 
-    assert(PlaneSize(frame, 1, width, height));
+    assert(frame.GetPlaneSize(1, width, height));
     assert(3 == width);
     assert(2 == height);
 
     frame.strides[1] = -8;
-    assert(PlaneSize(frame, 1, width, height));
+    assert(frame.GetPlaneSize(1, width, height));
 
     frame.strides[1] = 2;
-    assert(!PlaneSize(frame, 1, width, height));
+    assert(!frame.GetPlaneSize(1, width, height));
 
     frame.shiftY = 2;
-    assert(!PlaneSize(frame, 0, width, height));
+    assert(!frame.GetPlaneSize(0, width, height));
 }
 
 static void TestInvalidDllPaths()
 {
-    Decoder decoder;
+    CStartupVideoDecoder decoder;
 
     assert(!decoder.Open(nullptr, "missing.webm"));
     assert(!decoder.Open("", "missing.webm"));
@@ -115,27 +118,27 @@ static void TestCorruptVideo(const char* dllPath)
         char path[MAX_PATH * 3] = {};
         assert(WideCharToMultiByte(CP_UTF8, 0, tempFile, -1, path, sizeof(path), nullptr, nullptr));
 
-        Decoder corrupt;
+        CStartupVideoDecoder corrupt;
         assert(!corrupt.Open(dllPath, path));
     }
 
     assert(DeleteFileW(tempFile));
 }
 
-static void TestDecodeVideo(Decoder& decoder, const char* dllPath, const wchar_t* videoPath)
+static void TestDecodeVideo(CStartupVideoDecoder& decoder, const char* dllPath, const wchar_t* videoPath)
 {
     char file[4096] = {};
     assert(WideCharToMultiByte(CP_UTF8, 0, videoPath, -1, file, sizeof(file), nullptr, nullptr));
 
     assert(decoder.Open(dllPath, file));
 
-    Frame      frame;
-    int        width, height;
-    int        count    = 0;
-    double     previous = 0;
-    ReadResult result;
+    CStartupVideoFrame     frame;
+    int                    width, height;
+    int                    count    = 0;
+    double                 previous = 0;
+    StartupVideoReadResult result;
 
-    while ((result = decoder.Next(frame)) == ReadResult::FrameReady)
+    while ((result = decoder.Next(frame)) == StartupVideoReadResult_FrameReady)
     {
         assert(frame.width > 0);
         assert(frame.height > 0);
@@ -143,17 +146,17 @@ static void TestDecodeVideo(Decoder& decoder, const char* dllPath, const wchar_t
 
         for (int i = 0; i < 3; ++i)
         {
-            assert(PlaneSize(frame, i, width, height));
+            assert(frame.GetPlaneSize(i, width, height));
         }
 
         previous = frame.seconds;
         ++count;
     }
 
-    if (result == ReadResult::Error)
-        std::fprintf(stderr, "%s\n", decoder.Error().c_str());
+    if (result == StartupVideoReadResult_Error)
+        std::fprintf(stderr, "%s\n", decoder.GetError().c_str());
 
-    assert(ReadResult::End == result);
+    assert(StartupVideoReadResult_End == result);
     assert(count > 1);
 
     std::printf("Decoded %d frames, last timestamp %.3f seconds\n", count, previous);
@@ -181,7 +184,7 @@ static void TestDllSearchPath(const wchar_t* dllPath, const wchar_t* videoPath)
     const auto searchPath = original + L";" + path.substr(0, separator);
     assert(SetEnvironmentVariableW(L"PATH", searchPath.c_str()));
     {
-        Decoder decoder;
+        CStartupVideoDecoder decoder;
         assert(!decoder.Open("Mile.FFmpeg.dll", "missing-startup-video.webm"));
         const auto module = GetModuleHandleW(L"Mile.FFmpeg.dll");
         assert(module && GetProcAddress(module, "avcodec_version"));
@@ -196,9 +199,9 @@ static void TestDllSearchPath(const wchar_t* dllPath, const wchar_t* videoPath)
 //argv[2]: path to a WebM video to decode (optional)
 int wmain(int argc, wchar_t** argv)
 {
-    TestDestinationRect();
-    TestIsFrameDue();
-    TestPlaneSize();
+    TestCalcDestination();
+    TestFrameIsDue();
+    TestFrameGetPlaneSize();
     TestInvalidDllPaths();
 
     if (argc < 2)
@@ -209,7 +212,7 @@ int wmain(int argc, wchar_t** argv)
     const std::string dllPathAnsi = AnsiPath(argv[1]);
     const char*       dllPath     = dllPathAnsi.c_str();
 
-    Decoder decoder;
+    CStartupVideoDecoder decoder;
     assert(!decoder.Open(dllPath, "missing-startup-video.webm"));
 
     TestCorruptVideo(dllPath);
@@ -217,7 +220,7 @@ int wmain(int argc, wchar_t** argv)
     //Repeat failed opens to exercise partial-initialization cleanup and unload.
     for (int i = 0; i < 5; ++i)
     {
-        Decoder failed;
+        CStartupVideoDecoder failed;
         assert(!failed.Open(dllPath, "missing-startup-video.webm"));
     }
 

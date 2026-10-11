@@ -8,7 +8,7 @@
 
 static constexpr int TargetSize = 64;
 
-//Dirty the GL state that Painter::Draw touches, so the restore can be verified.
+//Dirty the GL state that CStartupVideoPainter::Draw touches, so the restore can be verified.
 static void SetDirtyState()
 {
     glViewport(3, 4, 17, 19);
@@ -59,11 +59,11 @@ static void CheckDirtyStateRestored()
 
 //Odd dimensions, padded rows and changing sizes exercise allocation
 //and chroma rounding. Top row is white; bottom row is black.
-static void TestStateAndOrientation(StartupVideo::Painter& painter, GLuint fbo)
+static void TestStateAndOrientation(CStartupVideoPainter& painter, GLuint fbo)
 {
     for (const auto shifts : {std::array<int, 2>{1, 1}, {1, 0}, {0, 0}})
     {
-        StartupVideo::Frame frame;
+        CStartupVideoFrame frame;
         frame.width  = 5 + shifts[0] * 2;
         frame.height = 5;
         frame.shiftX = shifts[0];
@@ -95,7 +95,7 @@ static void TestStateAndOrientation(StartupVideo::Painter& painter, GLuint fbo)
                 for (int i = 0; i < 3; ++i)
                 {
                     int w, h;
-                    assert(StartupVideo::PlaneSize(frame, i, w, h));
+                    assert(frame.GetPlaneSize(i, w, h));
 
                     frame.planes[i] += (h - 1) * frame.strides[i];
                     frame.strides[i] = -frame.strides[i];
@@ -104,7 +104,7 @@ static void TestStateAndOrientation(StartupVideo::Painter& painter, GLuint fbo)
 
             SetDirtyState();
 
-            const StartupVideo::Rect rect{0, 0, frame.width, frame.height};
+            const CStartupVideoRect rect{0, 0, frame.width, frame.height};
             assert(painter.Draw(frame, rect, TargetSize, TargetSize, fbo));
             assert(GL_NO_ERROR == glGetError());
 
@@ -125,7 +125,7 @@ static void TestStateAndOrientation(StartupVideo::Painter& painter, GLuint fbo)
 }
 
 //Expected bytes from hl-10210's yuv2rgb table with its V,U ordering.
-static void TestColorConversion(StartupVideo::Painter& painter, GLuint fbo)
+static void TestColorConversion(CStartupVideoPainter& painter, GLuint fbo)
 {
     //{Y, U, V, R, G, B}
     const std::array<int, 6> samples[] = {
@@ -142,7 +142,7 @@ static void TestColorConversion(StartupVideo::Painter& painter, GLuint fbo)
             static_cast<unsigned char>(sample[2]),
         };
 
-        StartupVideo::Frame frame;
+        CStartupVideoFrame frame;
         frame.width  = 1;
         frame.height = 1;
 
@@ -196,7 +196,7 @@ int main()
     }
 
     {
-        StartupVideo::Painter painter;
+        CStartupVideoPainter painter;
 
         GLuint fbo;
         GLuint color;

@@ -3,36 +3,35 @@
 #include <GL/glew.h>
 #include "startup_video.h"
 
-namespace StartupVideo
-{
-//Owns only startup resources; can run before Renderer::R_Init. Draw restores
-//every state it changes, without touching Renderer's state caches.
-class Painter
+/*
+    Owns only startup resources; can run before R_Init. Draw restores
+    every state it changes, without touching Renderer's state caches.
+*/
+class CStartupVideoPainter
 {
 public:
-    Painter() = default;
-    ~Painter();
+    CStartupVideoPainter() = default;
+    ~CStartupVideoPainter();
 
-    Painter(const Painter&)            = delete;
-    Painter& operator=(const Painter&) = delete;
+    CStartupVideoPainter(const CStartupVideoPainter&)            = delete;
+    CStartupVideoPainter& operator=(const CStartupVideoPainter&) = delete;
 
-    bool Draw(const Frame& frame, const Rect& rect, int windowWidth, int windowHeight, GLuint framebuffer = 0);
+    bool Draw(const CStartupVideoFrame& frame, const CStartupVideoRect& rect, int windowWidth, int windowHeight, GLuint framebuffer = 0);
 
-    const std::string& Error() const
+    const std::string& GetError() const
     {
-        return error;
+        return m_Error;
     }
 
 private:
     bool Initialize();
 
-    GLuint program     = 0;
-    GLuint vao         = 0;
-    GLuint textures[3] = {};
+    GLuint m_hProgram{};
+    GLuint m_hVAO{};
+    GLuint m_hTextures[3]{};
 
-    int widths[3]  = {};
-    int heights[3] = {};
+    int m_TextureWidths[3]{};
+    int m_TextureHeights[3]{};
 
-    std::string error;
+    std::string m_Error;
 };
-} // namespace StartupVideo

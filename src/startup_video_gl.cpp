@@ -1,10 +1,6 @@
 #include "startup_video_gl.h"
 
-namespace StartupVideo
-{
-namespace
-{
-constexpr const char* VertexShader = R"glsl(#version 330 core
+static constexpr const char* VertexShader = R"glsl(#version 330 core
 out vec2 texcoord;
 
 void main()
@@ -15,7 +11,7 @@ void main()
 }
 )glsl";
 
-constexpr const char* FragmentShader = R"glsl(#version 330 core
+static constexpr const char* FragmentShader = R"glsl(#version 330 core
 in vec2 texcoord;
 out vec4 color;
 
@@ -55,7 +51,7 @@ void main()
 }
 )glsl";
 
-constexpr GLenum SavedCapabilities[] = {
+static constexpr GLenum SavedCapabilities[] = {
     GL_DEPTH_TEST,
     GL_CULL_FACE,
     GL_STENCIL_TEST,
@@ -65,12 +61,13 @@ constexpr GLenum SavedCapabilities[] = {
     GL_DITHER,
 };
 
-constexpr size_t NumSavedCapabilities = sizeof(SavedCapabilities) / sizeof(SavedCapabilities[0]);
+static constexpr size_t NumSavedCapabilities = sizeof(SavedCapabilities) / sizeof(SavedCapabilities[0]);
 
-//Saves every GL state touched by Painter::Draw and switches to a clean state,
+//Saves every GL state touched by CStartupVideoPainter::Draw and switches to a clean state,
 //restores them all on destruction.
-struct SavedState
+class CStartupVideoSavedState
 {
+public:
     GLboolean enabled[NumSavedCapabilities] = {};
 
     GLint program;
@@ -94,7 +91,7 @@ struct SavedState
     GLboolean blend;
     GLboolean scissor;
 
-    SavedState()
+    CStartupVideoSavedState()
     {
         glGetIntegerv(GL_CURRENT_PROGRAM, &program);
         glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &vao);
@@ -138,7 +135,7 @@ struct SavedState
         glColorMaski(0, GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
     }
 
-    ~SavedState()
+    ~CStartupVideoSavedState()
     {
         glUseProgram(program);
         glBindVertexArray(vao);
@@ -183,7 +180,7 @@ struct SavedState
 };
 
 //Returns 0 and fills error with the info log on failure.
-GLuint CompileShader(GLenum stage, const char* source, std::string& error)
+static GLuint StartupVideo_CompileShader(GLenum stage, const char* source, std::string& error)
 {
     GLuint shader = glCreateShader(stage);
 
@@ -205,22 +202,21 @@ GLuint CompileShader(GLenum stage, const char* source, std::string& error)
 
     return shader;
 }
-} // namespace
 
-Painter::~Painter()
+CStartupVideoPainter::~CStartupVideoPainter()
 {
-    glDeleteTextures(3, textures);
+    glDeleteTextures(3, m_hTextures);
 
-    if (vao)
-        glDeleteVertexArrays(1, &vao);
+    if (m_hVAO)
+        glDeleteVertexArrays(1, &m_hVAO);
 
-    if (program)
-        glDeleteProgram(program);
+    if (m_hProgram)
+        glDeleteProgram(m_hProgram);
 }
 
-bool Painter::Initialize()
+bool CStartupVideoPainter::Initialize()
 {
-    if (program)
+    if (m_hProgram)
         return true;
 
     GLuint candidate = glCreateProgram();
@@ -232,13 +228,13 @@ bool Painter::Initialize()
 
     if (ok)
     {
-        vertexShader = CompileShader(GL_VERTEX_SHADER, VertexShader, error);
+        vertexShader = StartupVideo_CompileShader(GL_VERTEX_SHADER, VertexShader, m_Error);
         ok           = (vertexShader != 0);
     }
 
     if (ok)
     {
-        fragmentShader = CompileShader(GL_FRAGMENT_SHADER, FragmentShader, error);
+        fragmentShader = StartupVideo_CompileShader(GL_FRAGMENT_SHADER, FragmentShader, m_Error);
         ok             = (fragmentShader != 0);
     }
 
@@ -255,8 +251,8 @@ bool Painter::Initialize()
         {
             char log[1024] = {};
             glGetProgramInfoLog(candidate, sizeof(log), nullptr, log);
-            error = log;
-            ok    = false;
+            m_Error = log;
+            ok      = false;
         }
     }
 
@@ -271,26 +267,26 @@ bool Painter::Initialize()
         if (candidate)
             glDeleteProgram(candidate);
 
-        if (error.empty())
-            error = "Cannot create startup shader";
+        if (m_Error.empty())
+            m_Error = "Cannot create startup shader";
 
         return false;
     }
 
-    program = candidate;
+    m_hProgram = candidate;
 
-    glGenVertexArrays(1, &vao);
-    glGenTextures(3, textures);
+    glGenVertexArrays(1, &m_hVAO);
+    glGenTextures(3, m_hTextures);
 
-    glUseProgram(program);
-    glUniform1i(glGetUniformLocation(program, "planeY"), 0);
-    glUniform1i(glGetUniformLocation(program, "planeU"), 1);
-    glUniform1i(glGetUniformLocation(program, "planeV"), 2);
+    glUseProgram(m_hProgram);
+    glUniform1i(glGetUniformLocation(m_hProgram, "planeY"), 0);
+    glUniform1i(glGetUniformLocation(m_hProgram, "planeU"), 1);
+    glUniform1i(glGetUniformLocation(m_hProgram, "planeV"), 2);
 
     for (int i = 0; i < 3; ++i)
     {
         glActiveTexture(GL_TEXTURE0 + i);
-        glBindTexture(GL_TEXTURE_2D, textures[i]);
+        glBindTexture(GL_TEXTURE_2D, m_hTextures[i]);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -300,7 +296,7 @@ bool Painter::Initialize()
     return true;
 }
 
-bool Painter::Draw(const Frame& frame, const Rect& rect, int windowWidth, int windowHeight, GLuint framebuffer)
+bool CStartupVideoPainter::Draw(const CStartupVideoFrame& frame, const CStartupVideoRect& rect, int windowWidth, int windowHeight, GLuint framebuffer)
 {
     GLint maxTextureSize = 0;
     glGetIntegerv(GL_MAX_TEXTURE_SIZE, &maxTextureSize);
@@ -310,22 +306,22 @@ bool Painter::Draw(const Frame& frame, const Rect& rect, int windowWidth, int wi
 
     for (int i = 0; i < 3; ++i)
     {
-        if (!PlaneSize(frame, i, planeWidths[i], planeHeights[i]) ||
+        if (!frame.GetPlaneSize(i, planeWidths[i], planeHeights[i]) ||
             planeWidths[i] > maxTextureSize ||
             planeHeights[i] > maxTextureSize)
         {
-            error = "Invalid or oversized startup video plane";
+            m_Error = "Invalid or oversized startup video plane";
             return false;
         }
     }
 
     if (windowWidth <= 0 || windowHeight <= 0 || rect.width <= 0 || rect.height <= 0)
     {
-        error = "Invalid startup video viewport";
+        m_Error = "Invalid startup video viewport";
         return false;
     }
 
-    SavedState saved;
+    CStartupVideoSavedState saved;
 
     if (!Initialize())
         return false;
@@ -333,7 +329,7 @@ bool Painter::Draw(const Frame& frame, const Rect& rect, int windowWidth, int wi
     for (int i = 0; i < 3; ++i)
     {
         glActiveTexture(GL_TEXTURE0 + i);
-        glBindTexture(GL_TEXTURE_2D, textures[i]);
+        glBindTexture(GL_TEXTURE_2D, m_hTextures[i]);
 
         const int w = planeWidths[i];
         const int h = planeHeights[i];
@@ -341,12 +337,12 @@ bool Painter::Draw(const Frame& frame, const Rect& rect, int windowWidth, int wi
         glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
 
         //Reallocate only when plane size changes
-        if (widths[i] != w || heights[i] != h)
+        if (m_TextureWidths[i] != w || m_TextureHeights[i] != h)
         {
             glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, w, h, 0, GL_RED, GL_UNSIGNED_BYTE, nullptr);
 
-            widths[i]  = w;
-            heights[i] = h;
+            m_TextureWidths[i]  = w;
+            m_TextureHeights[i] = h;
         }
 
         if (frame.strides[i] > 0)
@@ -373,11 +369,10 @@ bool Painter::Draw(const Frame& frame, const Rect& rect, int windowWidth, int wi
     //Rect is top-left based, GL viewport is bottom-left based.
     glViewport(rect.x, windowHeight - rect.y - rect.height, rect.width, rect.height);
 
-    glUseProgram(program);
-    glBindVertexArray(vao);
-    glUniform2i(glGetUniformLocation(program, "chromaShift"), frame.shiftX, frame.shiftY);
+    glUseProgram(m_hProgram);
+    glBindVertexArray(m_hVAO);
+    glUniform2i(glGetUniformLocation(m_hProgram, "chromaShift"), frame.shiftX, frame.shiftY);
     glDrawArrays(GL_TRIANGLES, 0, 3);
 
     return true;
 }
-} // namespace StartupVideo
