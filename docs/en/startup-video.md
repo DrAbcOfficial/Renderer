@@ -21,7 +21,7 @@ standalone builds use the same helper; the aggregate shares one download.
 
 For Half-Life, the installer maps the `svencoop/` payload to `valve/` as usual.
 Before loading plugins, MetaHook adds `metahook/dlls` and its subdirectories to
-`PATH`. HL25 playback calls `LoadLibraryW(L"Mile.FFmpeg.dll")` using that host
+`PATH`. HL25 playback calls `LoadLibraryA("Mile.FFmpeg.dll")` using that host
 search path. No import library is linked and Renderer does not change the search
 path itself. The loader checks ABI major versions, allowing replacement
 with compatible builds rather than enforcing a runtime hash.

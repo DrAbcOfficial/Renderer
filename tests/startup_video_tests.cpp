@@ -7,6 +7,21 @@
 
 using namespace StartupVideo;
 
+//Decoder::Open takes an ANSI DLL path, matching the engine's char paths.
+static std::string AnsiPath(const wchar_t* path)
+{
+    const int count = WideCharToMultiByte(CP_ACP, 0, path, -1, nullptr, 0, nullptr, nullptr);
+    assert(count);
+
+    std::string result(count, '\0');
+    WideCharToMultiByte(CP_ACP, 0, path, -1, result.data(), count, nullptr, nullptr);
+
+    //Strip the null terminator
+    result.resize(count - 1);
+
+    return result;
+}
+
 static void TestDestinationRect()
 {
     //Fit down
@@ -69,18 +84,18 @@ static void TestInvalidDllPaths()
     Decoder decoder;
 
     assert(!decoder.Open(nullptr, "missing.webm"));
-    assert(!decoder.Open(L"", "missing.webm"));
-    assert(!decoder.Open(L"missing-startup-video-decoder.dll", "missing.webm"));
-    assert(!decoder.Open(L"Z:\\nonexistent\\Mile.FFmpeg.dll", "missing.webm"));
+    assert(!decoder.Open("", "missing.webm"));
+    assert(!decoder.Open("missing-startup-video-decoder.dll", "missing.webm"));
+    assert(!decoder.Open("Z:\\nonexistent\\Mile.FFmpeg.dll", "missing.webm"));
 
-    wchar_t systemDirectory[MAX_PATH] = {};
-    assert(GetSystemDirectoryW(systemDirectory, MAX_PATH));
+    char systemDirectory[MAX_PATH] = {};
+    assert(GetSystemDirectoryA(systemDirectory, MAX_PATH));
 
-    const std::wstring wrongDll = std::wstring(systemDirectory) + L"\\kernel32.dll";
+    const std::string wrongDll = std::string(systemDirectory) + "\\kernel32.dll";
     assert(!decoder.Open(wrongDll.c_str(), "missing.webm"));
 }
 
-static void TestCorruptVideo(const wchar_t* dllPath)
+static void TestCorruptVideo(const char* dllPath)
 {
     wchar_t tempDirectory[MAX_PATH] = {};
     wchar_t tempFile[MAX_PATH]      = {};
@@ -107,7 +122,7 @@ static void TestCorruptVideo(const wchar_t* dllPath)
     assert(DeleteFileW(tempFile));
 }
 
-static void TestDecodeVideo(Decoder& decoder, const wchar_t* dllPath, const wchar_t* videoPath)
+static void TestDecodeVideo(Decoder& decoder, const char* dllPath, const wchar_t* videoPath)
 {
     char file[4096] = {};
     assert(WideCharToMultiByte(CP_UTF8, 0, videoPath, -1, file, sizeof(file), nullptr, nullptr));
@@ -167,11 +182,11 @@ static void TestDllSearchPath(const wchar_t* dllPath, const wchar_t* videoPath)
     assert(SetEnvironmentVariableW(L"PATH", searchPath.c_str()));
     {
         Decoder decoder;
-        assert(!decoder.Open(L"Mile.FFmpeg.dll", "missing-startup-video.webm"));
+        assert(!decoder.Open("Mile.FFmpeg.dll", "missing-startup-video.webm"));
         const auto module = GetModuleHandleW(L"Mile.FFmpeg.dll");
         assert(module && GetProcAddress(module, "avcodec_version"));
         if (videoPath)
-            TestDecodeVideo(decoder, L"Mile.FFmpeg.dll", videoPath);
+            TestDecodeVideo(decoder, "Mile.FFmpeg.dll", videoPath);
     }
     assert(!GetModuleHandleW(L"Mile.FFmpeg.dll"));
     assert(SetEnvironmentVariableW(L"PATH", length ? original.c_str() : nullptr));
@@ -189,8 +204,10 @@ int wmain(int argc, wchar_t** argv)
     if (argc < 2)
         return 0;
 
-    const wchar_t* dllPath = argv[1];
-    TestDllSearchPath(dllPath, argc >= 3 ? argv[2] : nullptr);
+    TestDllSearchPath(argv[1], argc >= 3 ? argv[2] : nullptr);
+
+    const std::string dllPathAnsi = AnsiPath(argv[1]);
+    const char*       dllPath     = dllPathAnsi.c_str();
 
     Decoder decoder;
     assert(!decoder.Open(dllPath, "missing-startup-video.webm"));

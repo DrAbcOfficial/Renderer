@@ -226,7 +226,7 @@ int Decoder::Height() const
     return impl->codec ? impl->codec->height : 0;
 }
 
-bool Decoder::Open(const wchar_t* dllPath, const char* filename, bool (*interrupt)(void*), void* context)
+bool Decoder::Open(const char* dllPath, const char* filename, bool (*interrupt)(void*), void* context)
 {
     impl = std::make_unique<Impl>();
 
@@ -235,7 +235,7 @@ bool Decoder::Open(const wchar_t* dllPath, const char* filename, bool (*interrup
     if (!dllPath || !*dllPath || !filename || !*filename)
         return s.Fail("Invalid video or DLL name");
 
-    s.module = LoadLibraryW(dllPath);
+    s.module = LoadLibraryA(dllPath);
 
     if (!s.module)
         return s.Fail("Cannot load metahook/dlls/Mile.FFmpeg/Mile.FFmpeg.dll");

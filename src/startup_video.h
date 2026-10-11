@@ -53,7 +53,7 @@ public:
     Decoder& operator=(const Decoder&) = delete;
 
     //Accepts a DLL name on the host's search path or an explicit path for standalone callers.
-    bool Open(const wchar_t* dllPath, const char* filename, bool (*interrupt)(void*) = nullptr, void* context = nullptr);
+    bool Open(const char* dllPath, const char* filename, bool (*interrupt)(void*) = nullptr, void* context = nullptr);
 
     ReadResult Next(Frame& frame);
 

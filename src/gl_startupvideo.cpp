@@ -90,7 +90,7 @@ std::string Utf8Path(const char* path)
     return result;
 }
 
-void PlayVideo(const char* filename, void* window)
+void PlayStartupVideo(const char* filename, void* window)
 {
     if (!filename || !window)
         return;
@@ -117,7 +117,7 @@ void PlayVideo(const char* filename, void* window)
     StartupVideo::Decoder decoder;
 
     //MetaHook adds metahook/dlls and its subdirectories to PATH before loading plugins.
-    if (!decoder.Open(L"Mile.FFmpeg.dll", Utf8Path(filename).c_str(), PlaybackEvents::Interrupted, &events))
+    if (!decoder.Open("Mile.FFmpeg.dll", Utf8Path(filename).c_str(), PlaybackEvents::Interrupted, &events))
     {
         gEngfuncs.Con_Printf("Startup video: %s\n", decoder.Error().c_str());
         return;
