@@ -114,7 +114,9 @@ target_compile_options(renderer_settings INTERFACE /permissive /W3
     $<$<CONFIG:Release>:/wd4244;/wd4267;/wd4305>)
 
 include(cmake/Sources.cmake)
+include(cmake/SourceGroups.cmake)
 add_library(Renderer SHARED ${RENDERER_SOURCES})
+renderer_assign_source_groups(Renderer)
 target_link_libraries(Renderer PRIVATE renderer_settings libglew_static FreeImage opengl32)
 target_compile_definitions(Renderer PRIVATE $<$<CONFIG:Debug>:_DEBUG>)
 target_compile_options(Renderer PRIVATE /MP /Zi $<$<CONFIG:Debug>:/arch:SSE2>)
@@ -134,6 +136,7 @@ install(DIRECTORY assets/svencoop/renderer DESTINATION svencoop)
 option(RENDERER_BUILD_AVX2 "Also build and install Renderer_AVX2.dll" OFF)
 if(RENDERER_BUILD_AVX2)
     add_library(Renderer_AVX2 SHARED ${RENDERER_SOURCES})
+    renderer_assign_source_groups(Renderer_AVX2)
     target_link_libraries(Renderer_AVX2 PRIVATE renderer_settings libglew_static FreeImage opengl32)
     target_compile_definitions(Renderer_AVX2 PRIVATE $<$<CONFIG:Debug>:_DEBUG>)
     target_compile_options(Renderer_AVX2 PRIVATE /MP /Zi
