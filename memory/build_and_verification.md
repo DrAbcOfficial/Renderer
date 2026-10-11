@@ -14,7 +14,8 @@ permalink: renderer/build-and-verification
 - 当前实现使用固定 Mile.FFmpeg 6.1.0.0 SDK，聚合及独立构建共享
   `cmake/MileFFmpeg.cmake`；`MILE_FFMPEG_ROOT` 可覆盖下载路径。
   DLL 和许可证安装到 `svencoop/metahook/dlls/Mile.FFmpeg/`，运行时仅 HL25
-  通过绝对路径显式加载。没有增加引擎 WebM/VPX 私有符号；新增消费现有
+  按 DLL 名称显式加载，复用 MetaHook 加载插件前递归加入 `PATH` 的目录。
+  没有增加引擎 WebM/VPX 私有符号；新增消费现有
   `S_PrecacheSound`、`S_StartDynamicSound`、`S_Update` 的 HL25 记录。
 - 已验证：聚合 MSVC x86 Debug/Release 构建及 gamedata 校验；Renderer 8 项
   Debug CTest；新增 2 项 Release CTest；clang-format 23.1.3 检查。

@@ -8,22 +8,32 @@ namespace StartupVideo
 {
 struct Rect
 {
-    int x = 0, y = 0, width = 0, height = 0;
+    int x      = 0;
+    int y      = 0;
+    int width  = 0;
+    int height = 0;
 };
 
-// Preserve HL25's fit-down / fill-up policy, including centered cropping.
+//Preserve HL25's fit-down / fill-up policy, including centered cropping.
 Rect DestinationRect(int videoWidth, int videoHeight, int windowWidth, int windowHeight);
 
 struct Frame
 {
-    int                  width = 0, height = 0;
-    int                  shiftX = 0, shiftY = 0;
+    int width  = 0;
+    int height = 0;
+
+    //Chroma subsampling shift: 4:2:0 = (1, 1), 4:2:2 = (1, 0), 4:4:4 = (0, 0)
+    int shiftX = 0;
+    int shiftY = 0;
+
     const unsigned char* planes[3]  = {};
     int                  strides[3] = {};
-    double               seconds    = 0;
+
+    double seconds = 0;
 };
 
 bool PlaneSize(const Frame& frame, int plane, int& width, int& height);
+
 bool IsFrameDue(double elapsed, double timestamp);
 
 enum class ReadResult
@@ -38,15 +48,19 @@ class Decoder
 public:
     Decoder();
     ~Decoder();
+
     Decoder(const Decoder&)            = delete;
     Decoder& operator=(const Decoder&) = delete;
 
-    // The DLL path must be absolute. No process-wide DLL search-path changes.
-    bool               Open(const wchar_t* dllPath, const char* filename, bool (*interrupt)(void*) = nullptr, void* context = nullptr);
-    ReadResult         Next(Frame& frame);
+    //Accepts a DLL name on the host's search path or an explicit path for standalone callers.
+    bool Open(const wchar_t* dllPath, const char* filename, bool (*interrupt)(void*) = nullptr, void* context = nullptr);
+
+    ReadResult Next(Frame& frame);
+
     const std::string& Error() const;
-    int                Width() const;
-    int                Height() const;
+
+    int Width() const;
+    int Height() const;
 
 private:
     struct Impl;
