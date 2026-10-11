@@ -20,41 +20,37 @@ static std::string AnsiPath(const wchar_t* path)
     return result;
 }
 
-static void TestCalcDestination()
+static void TestCalcDestinationRect()
 {
     //Fit down
-    const auto down = CStartupVideoRect::CalcDestination(1920, 1080, 640, 480);
+    const auto down = StartupVideo_CalcDestinationRect(1920, 1080, 640, 480);
     assert(640 == down.width);
     assert(360 == down.height);
     assert(60 == down.y);
 
     //Fill up, cropped horizontally
-    const auto up = CStartupVideoRect::CalcDestination(320, 180, 640, 480);
+    const auto up = StartupVideo_CalcDestinationRect(320, 180, 640, 480);
     assert(853 == up.width);
     assert(480 == up.height);
     assert(-106 == up.x);
 
-    assert(0 == CStartupVideoRect::CalcDestination(0, 100, 640, 480).width);
+    assert(0 == StartupVideo_CalcDestinationRect(0, 100, 640, 480).width);
 }
 
-static void TestFrameIsDue()
+static void TestIsFrameDue()
 {
-    CStartupVideoFrame frame;
+    assert(!StartupVideo_IsFrameDue(0.2, 0.1));
+    assert(StartupVideo_IsFrameDue(0.2, 0.2));
+    assert(StartupVideo_IsFrameDue(0.2, 1.0));
 
-    frame.seconds = 0.2;
-    assert(!frame.IsDue(0.1));
-    assert(frame.IsDue(0.2));
-    assert(frame.IsDue(1.0));
-
-    frame.seconds = std::numeric_limits<double>::quiet_NaN();
-    assert(!frame.IsDue(1.0));
+    assert(!StartupVideo_IsFrameDue(std::numeric_limits<double>::quiet_NaN(), 1.0));
 }
 
 static void TestFrameGetPlaneSize()
 {
     unsigned char data[128] = {};
 
-    CStartupVideoFrame frame;
+    CStartupVideoFrameView frame;
     frame.width  = 5;
     frame.height = 3;
     frame.shiftX = 1;
@@ -132,13 +128,13 @@ static void TestDecodeVideo(CStartupVideoDecoder& decoder, const char* dllPath, 
 
     assert(decoder.Open(dllPath, file));
 
-    CStartupVideoFrame     frame;
+    CStartupVideoFrameView frame;
     int                    width, height;
     int                    count    = 0;
     double                 previous = 0;
     StartupVideoReadResult result;
 
-    while ((result = decoder.Next(frame)) == StartupVideoReadResult_FrameReady)
+    while ((result = decoder.Next(frame)) == StartupVideoReadResult::FrameReady)
     {
         assert(frame.width > 0);
         assert(frame.height > 0);
@@ -153,10 +149,10 @@ static void TestDecodeVideo(CStartupVideoDecoder& decoder, const char* dllPath, 
         ++count;
     }
 
-    if (result == StartupVideoReadResult_Error)
+    if (result == StartupVideoReadResult::Error)
         std::fprintf(stderr, "%s\n", decoder.GetError().c_str());
 
-    assert(StartupVideoReadResult_End == result);
+    assert(StartupVideoReadResult::End == result);
     assert(count > 1);
 
     std::printf("Decoded %d frames, last timestamp %.3f seconds\n", count, previous);
@@ -199,8 +195,8 @@ static void TestDllSearchPath(const wchar_t* dllPath, const wchar_t* videoPath)
 //argv[2]: path to a WebM video to decode (optional)
 int wmain(int argc, wchar_t** argv)
 {
-    TestCalcDestination();
-    TestFrameIsDue();
+    TestCalcDestinationRect();
+    TestIsFrameDue();
     TestFrameGetPlaneSize();
     TestInvalidDllPaths();
 

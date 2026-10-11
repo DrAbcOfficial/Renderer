@@ -153,12 +153,12 @@ private:
             return;
         }
 
-        CStartupVideoPainter painter;
-        CStartupVideoFrame   frame;
+        CStartupVideoPainter   painter;
+        CStartupVideoFrameView frame;
 
         auto status = decoder.Next(frame);
 
-        if (status != StartupVideoReadResult_FrameReady)
+        if (status != StartupVideoReadResult::FrameReady)
         {
             gEngfuncs.Con_Printf("Startup video: no decoded frame (%s).\n", decoder.GetError().c_str());
             return;
@@ -182,7 +182,7 @@ private:
 
         gEngfuncs.Con_Printf("Startup video: playing %s (%dx%d) with Mile.FFmpeg.\n", filename, decoder.GetWidth(), decoder.GetHeight());
 
-        while (status == StartupVideoReadResult_FrameReady)
+        while (status == StartupVideoReadResult::FrameReady)
         {
             //Wait until the frame is due, keep pumping sound and events meanwhile.
             while (!PollSkipEvents(this))
@@ -192,7 +192,7 @@ private:
 
                 const double elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
 
-                if (frame.IsDue(elapsed))
+                if (StartupVideo_IsFrameDue(frame.seconds, elapsed))
                     break;
 
                 Sleep(1);
@@ -212,7 +212,7 @@ private:
                 continue;
             }
 
-            const auto rect = CStartupVideoRect::CalcDestination(decoder.GetWidth(), decoder.GetHeight(), width, height);
+            const auto rect = StartupVideo_CalcDestinationRect(decoder.GetWidth(), decoder.GetHeight(), width, height);
 
             if (!painter.Draw(frame, rect, width, height))
             {
@@ -231,7 +231,7 @@ private:
         {
             gEngfuncs.Con_Printf("VIDEO PLAYBACK: user skipped playback.\n");
         }
-        else if (status == StartupVideoReadResult_Error)
+        else if (status == StartupVideoReadResult::Error)
         {
             gEngfuncs.Con_Printf("Startup video: %s\n", decoder.GetError().c_str());
         }

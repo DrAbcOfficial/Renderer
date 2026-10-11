@@ -14,7 +14,7 @@ extern "C"
 #include <cstdint>
 #include <limits>
 
-CStartupVideoRect CStartupVideoRect::CalcDestination(int videoWidth, int videoHeight, int windowWidth, int windowHeight)
+CStartupVideoRect StartupVideo_CalcDestinationRect(int videoWidth, int videoHeight, int windowWidth, int windowHeight)
 {
     if (videoWidth <= 0 || videoHeight <= 0 || windowWidth <= 0 || windowHeight <= 0)
         return {};
@@ -64,7 +64,7 @@ CStartupVideoRect CStartupVideoRect::CalcDestination(int videoWidth, int videoHe
     return {windowWidth / 2 - w / 2, windowHeight / 2 - h / 2, w, h};
 }
 
-bool CStartupVideoFrame::GetPlaneSize(int plane, int& planeWidth, int& planeHeight) const
+bool CStartupVideoFrameView::GetPlaneSize(int plane, int& planeWidth, int& planeHeight) const
 {
     if (plane < 0 || plane >= 3)
         return false;
@@ -100,12 +100,12 @@ bool CStartupVideoFrame::GetPlaneSize(int plane, int& planeWidth, int& planeHeig
     return true;
 }
 
-bool CStartupVideoFrame::IsDue(double elapsed) const
+bool StartupVideo_IsFrameDue(double frameSeconds, double elapsed)
 {
-    if (!std::isfinite(elapsed) || !std::isfinite(seconds))
+    if (!std::isfinite(elapsed) || !std::isfinite(frameSeconds))
         return false;
 
-    return elapsed >= seconds;
+    return elapsed >= frameSeconds;
 }
 
 // clang-format off
@@ -339,14 +339,14 @@ bool CStartupVideoDecoder::Open(const char* dllPath, const char* filename, bool 
     return true;
 }
 
-StartupVideoReadResult CStartupVideoDecoder::Next(CStartupVideoFrame& output)
+StartupVideoReadResult CStartupVideoDecoder::Next(CStartupVideoFrameView& output)
 {
     output = {};
 
     if (!m_pCodec || !m_pFrame || !m_pPacket)
     {
         Fail("Video decoder is not open");
-        return StartupVideoReadResult_Error;
+        return StartupVideoReadResult::Error;
     }
 
     auto& api = *m_pAPI;
@@ -358,7 +358,7 @@ StartupVideoReadResult CStartupVideoDecoder::Next(CStartupVideoFrame& output)
         if (IsInterrupted())
         {
             Fail("Startup video interrupted");
-            return StartupVideoReadResult_Error;
+            return StartupVideoReadResult::Error;
         }
 
         int result = api.avcodec_receive_frame(m_pCodec, m_pFrame);
@@ -367,12 +367,12 @@ StartupVideoReadResult CStartupVideoDecoder::Next(CStartupVideoFrame& output)
             break;
 
         if (result == AVERROR_EOF)
-            return StartupVideoReadResult_End;
+            return StartupVideoReadResult::End;
 
         if (result != AVERROR(EAGAIN))
         {
             Fail("Video decode failed", result);
-            return StartupVideoReadResult_Error;
+            return StartupVideoReadResult::Error;
         }
 
         if (!m_PacketPending && !m_Draining)
@@ -391,7 +391,7 @@ StartupVideoReadResult CStartupVideoDecoder::Next(CStartupVideoFrame& output)
             else if (result < 0)
             {
                 Fail("Cannot read video packet", result);
-                return StartupVideoReadResult_Error;
+                return StartupVideoReadResult::Error;
             }
             else
             {
@@ -405,7 +405,7 @@ StartupVideoReadResult CStartupVideoDecoder::Next(CStartupVideoFrame& output)
         {
             //receive just returned EAGAIN; send must accept input or fail.
             Fail("Cannot submit video packet", result);
-            return StartupVideoReadResult_Error;
+            return StartupVideoReadResult::Error;
         }
 
         m_PacketPending = false;
@@ -435,7 +435,7 @@ StartupVideoReadResult CStartupVideoDecoder::Next(CStartupVideoFrame& output)
         default:
         {
             Fail("Unsupported startup video pixel format (requires planar 8-bit YUV)");
-            return StartupVideoReadResult_Error;
+            return StartupVideoReadResult::Error;
         }
     }
 
@@ -452,7 +452,7 @@ StartupVideoReadResult CStartupVideoDecoder::Next(CStartupVideoFrame& output)
         if (!output.GetPlaneSize(i, w, h))
         {
             Fail("Invalid decoded video plane");
-            return StartupVideoReadResult_Error;
+            return StartupVideoReadResult::Error;
         }
     }
 
@@ -475,7 +475,7 @@ StartupVideoReadResult CStartupVideoDecoder::Next(CStartupVideoFrame& output)
     if (!std::isfinite(output.seconds))
     {
         Fail("Invalid video timestamp");
-        return StartupVideoReadResult_Error;
+        return StartupVideoReadResult::Error;
     }
 
     //Timestamps must never go backwards
@@ -483,7 +483,7 @@ StartupVideoReadResult CStartupVideoDecoder::Next(CStartupVideoFrame& output)
 
     m_LastSeconds = output.seconds;
 
-    return StartupVideoReadResult_FrameReady;
+    return StartupVideoReadResult::FrameReady;
 }
 
 #undef STARTUP_FFMPEG_APIS

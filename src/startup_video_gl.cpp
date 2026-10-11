@@ -273,7 +273,7 @@ bool CStartupVideoPainter::Initialize()
     return true;
 }
 
-bool CStartupVideoPainter::Draw(const CStartupVideoFrame& frame, const CStartupVideoRect& rect, int windowWidth, int windowHeight, GLuint framebuffer)
+bool CStartupVideoPainter::Draw(const CStartupVideoFrameView& frame, const CStartupVideoRect& rect, int windowWidth, int windowHeight, GLuint framebuffer)
 {
     GLint maxTextureSize = 0;
     glGetIntegerv(GL_MAX_TEXTURE_SIZE, &maxTextureSize);

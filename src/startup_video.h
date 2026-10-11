@@ -17,14 +17,20 @@ public:
     int y{};
     int width{};
     int height{};
-
-    /*
-        Preserve HL25's fit-down / fill-up policy, including centered cropping.
-    */
-    static CStartupVideoRect CalcDestination(int videoWidth, int videoHeight, int windowWidth, int windowHeight);
 };
 
-class CStartupVideoFrame
+/*
+    Preserve HL25's fit-down / fill-up policy, including centered cropping.
+*/
+CStartupVideoRect StartupVideo_CalcDestinationRect(int videoWidth, int videoHeight, int windowWidth, int windowHeight);
+
+//Frames whose timestamp is not finite are never due.
+bool StartupVideo_IsFrameDue(double frameSeconds, double elapsed);
+
+/*
+    Non-owning view of a decoded frame: planes stay valid only until the next Next() or Close() of the decoder.
+*/
+class CStartupVideoFrameView
 {
 public:
     int width{};
@@ -40,14 +46,13 @@ public:
     double seconds{};
 
     bool GetPlaneSize(int plane, int& planeWidth, int& planeHeight) const;
-    bool IsDue(double elapsed) const;
 };
 
-enum StartupVideoReadResult
+enum class StartupVideoReadResult
 {
-    StartupVideoReadResult_FrameReady = 0,
-    StartupVideoReadResult_End,
-    StartupVideoReadResult_Error
+    FrameReady = 0,
+    End,
+    Error
 };
 
 class CStartupVideoFFmpegAPI;
@@ -66,7 +71,7 @@ public:
     */
     bool Open(const char* dllPath, const char* filename, bool (*interrupt)(void*) = nullptr, void* context = nullptr);
 
-    StartupVideoReadResult Next(CStartupVideoFrame& output);
+    StartupVideoReadResult Next(CStartupVideoFrameView& output);
 
     const std::string& GetError() const;
 

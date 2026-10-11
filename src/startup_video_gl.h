@@ -16,7 +16,7 @@ public:
     CStartupVideoPainter(const CStartupVideoPainter&)            = delete;
     CStartupVideoPainter& operator=(const CStartupVideoPainter&) = delete;
 
-    bool Draw(const CStartupVideoFrame& frame, const CStartupVideoRect& rect, int windowWidth, int windowHeight, GLuint framebuffer = 0);
+    bool Draw(const CStartupVideoFrameView& frame, const CStartupVideoRect& rect, int windowWidth, int windowHeight, GLuint framebuffer = 0);
 
     const std::string& GetError() const
     {

@@ -81,7 +81,7 @@ static void TestStateAndOrientation(CStartupVideoPainter& painter, GLuint fbo)
 {
     for (const auto shifts : {std::array<int, 2>{1, 1}, {1, 0}, {0, 0}})
     {
-        CStartupVideoFrame frame;
+        CStartupVideoFrameView frame;
         frame.width  = 5 + shifts[0] * 2;
         frame.height = 5;
         frame.shiftX = shifts[0];
@@ -160,7 +160,7 @@ static void TestColorConversion(CStartupVideoPainter& painter, GLuint fbo)
             static_cast<unsigned char>(sample[2]),
         };
 
-        CStartupVideoFrame frame;
+        CStartupVideoFrameView frame;
         frame.width  = 1;
         frame.height = 1;
 
