@@ -6193,11 +6193,6 @@ void __fastcall CVideoMode_Common_DrawStartupGraphic(void* pthis, int dummy, voi
     }
 }
 
-void __fastcall CGame_DrawStartupVideo(void* pgame, int dummy, const char* filename, void* window)
-{
-    //not available yet. See https://github.com/MetaHookSv/MetaHookSv/issues/699
-}
-
 void LegacyMultiTextureInit()
 {
     //The engine's legacy multitexture / detail-texture init issues fixed-function calls

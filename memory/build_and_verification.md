@@ -9,6 +9,28 @@ permalink: renderer/build-and-verification
 本笔记记录 Renderer 的构建入口、依赖解析规则、gamedata 同步与验证状态。命令与参数的完整说明见
 [README](../README.md) 及 `docs/en/build-instruction.md`、`docs/zh-CN/build-instruction.md`。
 
+## 2026-10-11：HL25 启动视频（Issue #699）
+
+- 当前实现使用固定 Mile.FFmpeg 6.1.0.0 SDK，聚合及独立构建共享
+  `cmake/MileFFmpeg.cmake`；`MILE_FFMPEG_ROOT` 可覆盖下载路径。
+  DLL 和许可证安装到 `svencoop/metahook/dlls/Mile.FFmpeg/`，运行时仅 HL25
+  通过绝对路径显式加载。没有增加引擎 WebM/VPX 私有符号；新增消费现有
+  `S_PrecacheSound`、`S_StartDynamicSound`、`S_Update` 的 HL25 记录。
+- 已验证：聚合 MSVC x86 Debug/Release 构建及 gamedata 校验；Renderer 8 项
+  Debug CTest；新增 2 项 Release CTest；clang-format 23.1.3 检查。
+  独立 Renderer 配置成功。安装树和 Debug/Release DLL 导入表验证通过。
+- 原版 `valve.webm` 通过生产解码代码读出 150 帧，末帧时间戳 9.933 秒。
+  实机 HL25 日志记录 `completed, 150 frames presented` 后正常退出；
+  `-novid` 不进入视频路径。Sven Co-op 未部署 Mile.FFmpeg 也正常初始化、退出。
+- GL 4.4 Core 实测包括 420/422/444、奇数尺寸、负 stride、图像方向、
+  HL25 原始转换表的彩色样本，以及 GL 状态恢复。HL25 原代码把 V/U 反向传入
+  yuv2rgb 表；shader 保留这一颜色行为，而非直接套用标准 BT.601 矩阵。
+- 实机声音听感、三个跳过键、全屏视觉效果及进入地图后的完整渲染仍待人工验收。
+  窗口截图未捕获到视频，不能据此声称视觉验收通过。测试部署文件已恢复。
+  启动静态图的 ringbuffer 帧外分配警告在 `-novid` 对照中同样存在，属于原有路径。
+- 发布前仍需提供与 SDK 对应的完整第三方源码及构建材料，见
+  `docs/en/startup-video.md`。本次没有发布或提交二进制。
+
 ## 构建入口
 
 - 约束：Windows + MSVC x86（`-A Win32`）、CMake ≥ 3.21、仅 Debug / Release 两种配置。

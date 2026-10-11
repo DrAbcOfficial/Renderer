@@ -57,3 +57,17 @@ add_test(NAME gl_shadow_cache_tests COMMAND gl_shadow_cache_tests
     "${PROJECT_SOURCE_DIR}/assets/cstrike/maps/cs_assault_shadow.obj"
     "${PROJECT_SOURCE_DIR}/assets/cstrike/maps/cs_assault_entity.txt")
 set_tests_properties(gl_shadow_cache_tests PROPERTIES SKIP_RETURN_CODE 2 TIMEOUT 180)
+
+add_executable(startup_video_tests startup_video_tests.cpp ../src/startup_video.cpp)
+target_link_libraries(startup_video_tests PRIVATE renderer_settings)
+target_compile_options(startup_video_tests PRIVATE /UNDEBUG)
+add_test(NAME startup_video_tests COMMAND startup_video_tests
+    "${RENDERER_MILE_FFMPEG_ROOT}/Redist/x86/Mile.FFmpeg.dll")
+
+add_executable(startup_video_gl_tests startup_video_gl_tests.cpp
+    ../src/startup_video.cpp ../src/startup_video_gl.cpp)
+target_compile_definitions(startup_video_gl_tests PRIVATE GLFW_INCLUDE_NONE)
+target_compile_options(startup_video_gl_tests PRIVATE /UNDEBUG)
+target_link_libraries(startup_video_gl_tests PRIVATE renderer_settings libglew_static glfw)
+add_test(NAME startup_video_gl_tests COMMAND startup_video_gl_tests)
+set_tests_properties(startup_video_gl_tests PROPERTIES SKIP_RETURN_CODE 2 TIMEOUT 60)

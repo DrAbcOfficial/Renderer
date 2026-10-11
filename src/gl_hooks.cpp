@@ -641,6 +641,7 @@ void Engine_FillAddress_DrawStartupVideo(const mh_dll_info_t& DllInfo, const mh_
         return;
 
     gPrivateFuncs.CGame_DrawStartupVideo = (decltype(gPrivateFuncs.CGame_DrawStartupVideo))GamedataResolvePtr(RealDllInfo.ImageBase, "engine", "CGame_DrawStartupVideo", MH_GAMESYMBOL_KIND_FUNCTION);
+    R_ResolveStartupVideoSound(RealDllInfo.ImageBase);
 }
 
 void Engine_FillAddress_Draw_Frame(const mh_dll_info_t& DllInfo, const mh_dll_info_t& RealDllInfo)
@@ -1206,7 +1207,10 @@ void Engine_InstallHooks(void)
     Install_InlineHook(PVSNode);
     Install_InlineHook(Host_ClearMemory);
     Install_InlineHook(CVideoMode_Common_DrawStartupGraphic);
-    Install_InlineHook(CGame_DrawStartupVideo);
+    if (g_iEngineType == ENGINE_GOLDSRC_HL25)
+    {
+        Install_InlineHook(CGame_DrawStartupVideo);
+    }
     Install_InlineHook(Draw_Frame);
     Install_InlineHook(Draw_SpriteFrameHoles);
     Install_InlineHook(Draw_SpriteFrameHoles_SvEngine);

@@ -102,6 +102,7 @@ target_include_directories(renderer_settings INTERFACE
     ${RENDERER_SDL3_INCLUDE_DIRS}
     ${RENDERER_SDL2_INCLUDE_DIRS}
     ${RENDERER_TINYOBJLOADER_INCLUDE_DIRS}
+    ${RENDERER_MILE_FFMPEG_INCLUDE_DIRS}
     # Tests consume dependency headers without linking the libraries.
     "$<TARGET_PROPERTY:libglew_static,INTERFACE_INCLUDE_DIRECTORIES>"
     "$<TARGET_PROPERTY:FreeImage,INTERFACE_INCLUDE_DIRECTORIES>"
@@ -128,6 +129,9 @@ set_target_properties(Renderer PROPERTIES INTERPROCEDURAL_OPTIMIZATION_RELEASE T
 install(TARGETS Renderer RUNTIME DESTINATION svencoop/metahook/plugins)
 install(FILES "$<TARGET_PDB_FILE:Renderer>" DESTINATION svencoop/metahook/plugins)
 install(FILES "$<TARGET_FILE:FreeImage>" DESTINATION svencoop/metahook/dlls/FreeImage)
+install(FILES "${RENDERER_MILE_FFMPEG_ROOT}/Redist/x86/Mile.FFmpeg.dll"
+    "${RENDERER_MILE_FFMPEG_ROOT}/License.txt"
+    DESTINATION svencoop/metahook/dlls/Mile.FFmpeg)
 install(DIRECTORY assets/svencoop/renderer DESTINATION svencoop)
 
 # Optional AVX2 variant installed as Renderer_AVX2.dll. The launcher probes
