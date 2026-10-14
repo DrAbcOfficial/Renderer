@@ -1,5 +1,6 @@
 # Explicit compile list from MetaHookSv Renderer.vcxproj at 11a8527.
 set(RENDERER_SOURCES
+    "src/ModelPreview.cpp"
     "${METAHOOK_SOURCE_PATH}/include/HLSDK/common/interface.cpp"
     "${METAHOOK_SOURCE_PATH}/include/SourceSDK/filesystem.cpp"
     "${METAHOOK_SOURCE_PATH}/include/SourceSDK/filesystem_helpers.cpp"

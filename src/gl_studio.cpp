@@ -1,4 +1,5 @@
 #include "gl_local.h"
+#include "ModelPreview.h"
 #include "studio_model_validation.h"
 #include "triangleapi.h"
 #include "mathlib2.h"
@@ -3375,6 +3376,8 @@ void studioapi_RestoreRenderer(void)
 
 qboolean studioapi_StudioCheckBBox(void)
 {
+    if (modelpreview::isActive())
+        return true;
     if (R_IsCollectingShadowCasters())
         return true;
     if (!g_bIsSvenCoop)
@@ -3494,6 +3497,8 @@ qboolean studioapi_StudioCheckBBox(void)
 
 void studioapi_StudioDynamicLight(cl_entity_t* ent, alight_t* plight)
 {
+    if (modelpreview::setupLight(plight))
+        return;
     float dies[256];
 
     if ((int)r_studio_legacy_dlight->value == 0)
@@ -3553,6 +3558,12 @@ __forceinline void StudioRenderFinal_Template(CallType pfnRenderFinal, void* pth
 template <typename CallType>
 __forceinline void StudioRenderModel_Template(CallType pfnRenderModel, CallType pfnRenderFinal, void* pthis = nullptr, int dummy = 0)
 {
+    if (modelpreview::isActive())
+    {
+        // UI previews must not schedule scene deferred/outline/hair passes.
+        pfnRenderModel(pthis, dummy);
+        return;
+    }
     if (R_IsRenderingShadowView())
     {
         pfnRenderModel(pthis, dummy);

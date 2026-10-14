@@ -1,4 +1,5 @@
 #include "gl_local.h"
+#include "ModelPreview.h"
 #include "gl_common.h"
 #include "gl_startupvideo.h"
 #include "graphic_engine_initialization.h"
@@ -2237,7 +2238,7 @@ void R_DrawBrushEntity(bool bTransparent)
 void R_DrawStudioEntity(bool bTransparent)
 {
     //Do not fire model events (sounds, muzzle flashes...) when the shadow cache only wants the bone setup.
-    const int studioFlags = R_IsCollectingShadowCasters() ? STUDIO_RENDER : (STUDIO_RENDER | STUDIO_EVENTS);
+    const int studioFlags = (R_IsCollectingShadowCasters() || modelpreview::isActive()) ? STUDIO_RENDER : (STUDIO_RENDER | STUDIO_EVENTS);
 
     if ((*currententity)->player)
     {
