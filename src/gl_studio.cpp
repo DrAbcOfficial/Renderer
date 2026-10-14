@@ -1520,6 +1520,7 @@ void R_LoadStudioProgramStates(void)
 
 void R_ShutdownStudio(void)
 {
+    modelpreview::freeBuffers();
     g_StudioProgramTable.clear();
 
     R_StudioFlushAllSkins();
@@ -3105,6 +3106,13 @@ void R_StudioDrawMesh_DrawPass(
         glUniform2f(prog.r_nearplaneclip, r_drawlowerbodyclipnear->value, r_drawlowerbodyclipfar->value);
     }
 
+    if (modelpreview::isActive())
+    {
+        if (StudioProgramState & STUDIO_ADDITIVE_BLEND_ENABLED)
+            glBlendFuncSeparate(GL_ONE, GL_ONE, GL_ZERO, GL_ONE);
+        else if (StudioProgramState & STUDIO_ALPHA_BLEND_ENABLED)
+            glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+    }
     glDrawElements(GL_TRIANGLES, pRenderMesh->iIndiceCount, GL_UNSIGNED_INT, BUFFER_OFFSET(pRenderMesh->iStartIndex));
 
     GL_UseProgram(0);

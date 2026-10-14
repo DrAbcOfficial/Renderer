@@ -90,6 +90,11 @@ void R_UseDrawTexturedRectProgram(program_state_t state, drawtexturedrect_progra
     {
         std::stringstream defs;
 
+        if (state & DRAW_TEXTURED_RECT_PREMULTIPLIED_ALPHA_ENABLED)
+        {
+            defs << "#define PREMULTIPLIED_ALPHA_ENABLED\n";
+        }
+
         if (state & DRAW_TEXTURED_RECT_ALPHA_TEST_ENABLED)
         {
             defs << "#define ALPHA_TEST_ENABLED\n";
@@ -132,6 +137,7 @@ void R_UseDrawTexturedRectProgram(program_state_t state, drawtexturedrect_progra
 }
 
 const program_state_mapping_t s_DrawTexturedRectProgramStateName[] = {
+    {DRAW_TEXTURED_RECT_PREMULTIPLIED_ALPHA_ENABLED, "DRAW_TEXTURED_RECT_PREMULTIPLIED_ALPHA_ENABLED"},
     {DRAW_TEXTURED_RECT_ALPHA_BLEND_ENABLED, "DRAW_TEXTURED_RECT_ALPHA_BLEND_ENABLED"},
     {DRAW_TEXTURED_RECT_ADDITIVE_BLEND_ENABLED, "DRAW_TEXTURED_RECT_ADDITIVE_BLEND_ENABLED"},
     {DRAW_TEXTURED_RECT_ALPHA_BASED_ADDITIVE_ENABLED, "DRAW_TEXTURED_RECT_ALPHA_BASED_ADDITIVE_ENABLED"},
@@ -506,7 +512,12 @@ void R_DrawTexturedRect(int gltexturenum, const texturedrectvertex_t* verticeBuf
 
     GL_BindVAO(g_DrawTexturedRectCommand.hVAO);
 
-    if (programState & DRAW_TEXTURED_RECT_ALPHA_BLEND_ENABLED)
+    if (programState & DRAW_TEXTURED_RECT_PREMULTIPLIED_ALPHA_ENABLED)
+    {
+        glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+        glEnable(GL_BLEND);
+    }
+    else if (programState & DRAW_TEXTURED_RECT_ALPHA_BLEND_ENABLED)
     {
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -658,7 +669,12 @@ void R_DrawTexturedRectMask(int gltexturenum, int maskTextureId, const texturedr
 
     GL_BindVAO(g_DrawTexturedRectCommand.hVAO);
 
-    if (programState & DRAW_TEXTURED_RECT_ALPHA_BLEND_ENABLED)
+    if (programState & DRAW_TEXTURED_RECT_PREMULTIPLIED_ALPHA_ENABLED)
+    {
+        glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+        glEnable(GL_BLEND);
+    }
+    else if (programState & DRAW_TEXTURED_RECT_ALPHA_BLEND_ENABLED)
     {
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);

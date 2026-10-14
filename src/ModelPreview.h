@@ -10,4 +10,5 @@ bool isActive();
 bool setupLight(alight_s* Light);
 void install(engine_studio_api_s* Studio);
 void uninstall();
+void freeBuffers();
 }

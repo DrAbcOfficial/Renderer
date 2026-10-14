@@ -20,6 +20,7 @@ struct ModelPreviewView {
     float LightColor[3] = {1, 1, 1};
     float LightDirection[3] = {-1, 0, -1};
     float Background[4] = {0, 0, 0, 0};
+    bool Lighting = true;
 };
 
 class IModelPreviewRenderer : public IBaseInterface {

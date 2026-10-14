@@ -24,6 +24,11 @@ void main()
 	#endif
 
 	vec4 finalColor = baseColor * v_color;
+#ifdef PREMULTIPLIED_ALPHA_ENABLED
+	// The texture already contains premultiplied colour; vertex opacity must
+	// still attenuate both RGB and coverage.
+	finalColor.rgb *= v_color.a;
+#endif
 	
 	#if defined(MASK_TEXTURE_ENABLED)
 		vec4 maskColor = texture(maskTex, v_diffusetexcoord.xy);
