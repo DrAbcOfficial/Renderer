@@ -1,4 +1,5 @@
 #include "gl_local.h"
+#include "entity_view.h"
 #include "cubemap_shadow_gl.h"
 #include "pm_defs.h"
 #include <sstream>
@@ -671,6 +672,10 @@ bool R_IsDeferredRenderingEnabled(void)
 bool R_CanRenderGBuffer(void)
 {
     if (!R_IsDeferredRenderingEnabled())
+        return false;
+
+    //A view is an isolated entity render; it does not own a G-Buffer pass.
+    if (EntityView_IsActive())
         return false;
 
     if (R_IsRenderingWaterView())

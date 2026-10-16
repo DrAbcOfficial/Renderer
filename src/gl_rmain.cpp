@@ -441,6 +441,11 @@ bool R_CanRenderFog()
     if ((*r_refdef.onlyClientDraws))
         return false;
 
+    //A view supplies its own light and shows one entity; the frame's fog is
+    //not part of it.
+    if (EntityView_IsActive())
+        return false;
+
     if (CL_IsDevOverviewMode())
         return false;
 
@@ -3840,7 +3845,6 @@ void R_NewMap(void)
 {
     memset(&r_params, 0, sizeof(r_params));
 
-    R_GenerateSceneUBO();
     R_FreeWorldResources();
     R_FreePortalResouces();
 
@@ -4423,7 +4427,15 @@ void R_SetupFrame(void)
 
     (*r_oldviewleaf) = (*r_viewleaf);
 
-    if (r_refdef_SvEngine && r_refdef_SvEngine->useCamera)
+    //An entity view can run before the first map; without a world there is no
+    //leaf to look up.
+    //An entity view holds one entity and no world: there is no leaf to look up
+    //(and the world may be mid-replacement while the view runs).
+    if (!(*cl_worldmodel) || EntityView_IsActive())
+    {
+        (*r_viewleaf) = nullptr;
+    }
+    else if (r_refdef_SvEngine && r_refdef_SvEngine->useCamera)
     {
         (*r_viewleaf) = Mod_PointInLeaf(r_refdef_SvEngine->r_camera_origin, (*cl_worldmodel));
     }
@@ -4453,6 +4465,11 @@ void R_SetupFrame(void)
 
 void R_MarkLeaves(void)
 {
+    //Without a world there is no PVS to mark (an entity view before the first
+    //map renders its entity only).
+    if (!(*cl_worldmodel))
+        return;
+
     if ((*r_oldviewleaf) == (*r_viewleaf) && !r_novis->value)
         return;
 
@@ -4649,6 +4666,11 @@ void R_EndRenderOpaque(void)
 
 void ClientDLL_DrawNormalTriangles(void)
 {
+    //A view shows only its entity; the client's own 3D drawing (viewmodel and
+    //friends) belongs to the frame, not to the view.
+    if (EntityView_IsActive())
+        return;
+
     R_FinishShadowCasterPass();
     GL_BeginDebugGroup("ClientDLL_DrawNormalTriangles");
     //Good news: Stencil write has been completely removed from portal code.
@@ -4674,6 +4696,8 @@ void ClientDLL_DrawNormalTriangles(void)
 
 void R_RenderScene(void)
 {
+    const bool bView = EntityView_IsActive();
+
     GL_BeginDebugGroup("R_RenderScene");
 
     if (CL_IsDevOverviewMode())
@@ -4682,7 +4706,12 @@ void R_RenderScene(void)
     R_SetupFrame();
     R_SetupGL();
     R_SetFrustum();
-    R_MarkLeaves();
+
+    //A view draws no world, so it neither marks world leaves nor draws the
+    //world model: both read world data that a level transition may be
+    //replacing while the view runs.
+    if (!bView)
+        R_MarkLeaves();
 
     R_BeginRenderGBuffer();
 
@@ -4690,7 +4719,9 @@ void R_RenderScene(void)
 
     if (!(*r_refdef.onlyClientDraws))
     {
-        R_DrawWorld();
+        if (!bView)
+            R_DrawWorld();
+
         R_DrawEntitiesOnList();
     }
 
@@ -6109,6 +6140,16 @@ void GL_Init(void)
 
     GL_GenerateFrameBuffers();
     GL_InitShaders();
+
+    GL_GenerateUBO();
+}
+
+void GL_GenerateUBO(void)
+{
+    //The scene and studio UBOs must exist before any map loads: an entity view
+    //draws through the scene pipeline while the game is still in its menu.
+    R_GenerateSceneUBO();
+    R_GenerateStudioUBO();
 }
 
 void GL_Shutdown(void* window, HDC pmaindc, HGLRC pbaseRC)
@@ -6118,6 +6159,10 @@ void GL_Shutdown(void* window, HDC pmaindc, HGLRC pbaseRC)
 
     GL_FreeShaders();
     GL_FreeFrameBuffers();
+
+    //The UBOs belong to the GL context as well and must be recreated with it.
+    R_FreeSceneUBO();
+    R_FreeStudioUBO();
 
     if (!gPrivateFuncs.SDL_GL_SetAttribute)
     {
@@ -7434,6 +7479,15 @@ public:
 
     void DrawCurrentEntity(bool bTransparent) override
     {
+        //Inside a view the entity is drawn through the scene pipeline with the
+        //visible-entity list (see entity_view.cpp); the flag only matters for
+        //the ordinary path.
+        if (EntityView_IsActive())
+        {
+            EntityView_DrawCurrentEntity(*currententity);
+            return;
+        }
+
         R_DrawCurrentEntity(bTransparent);
     }
 

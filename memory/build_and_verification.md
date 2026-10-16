@@ -144,3 +144,31 @@ permalink: renderer/build-and-verification
   产物与独立工程同尺寸。
 - 已验证：AbcUi（AbcCore 的 Renderer pin 本地签出到该提交）Debug / Release 构建退出 0，库内同样只含新接口字符串。
 - 未验证：实机运行、GL 视觉表现与在线验收（由维护者完成）。公共接口更新后必须重新配置并重跑构建与测试。
+
+## 2026-10-16：PR #18 评审修复（实体视图改走场景管线）
+
+- 评审分流：5 条线程中 4 条有效、1 条 outdated（锚定 `src/ModelPreview.cpp`，该文件已被 `ee7c1bd` 删除，不据此改动）。
+- 实现：`entity_view.cpp` 重写为 “`cl_visedicts` 单实体 + `R_RenderScene` + 共享相机 UBO（multiview）”；
+  删除私有 UBO、GL 状态保存块与 cvar 开关保存块；`GL_Init` 新增 `GL_GenerateUBO()`（场景 + studio UBO
+  提前创建，`GL_Shutdown` 释放）；`R_GetWorldSurfaceModel` 判空；视图激活时管线跳过世界相关步骤
+  （`R_SetupFrame` 取叶、`R_MarkLeaves`、`R_DrawWorld`、GBuffer、`ClientDLL_DrawNormalTriangles`、雾）。
+  `V_RenderView` 因目标 FBO 被 `R_PreRenderView` 覆盖、`R_RenderView_SvEngine` 会污染 final buffer 并绘制
+  viewmodel 而被判定冲突，按约定回退到 `R_RenderScene` 方案。
+- 已验证：独立工程 Win32 Debug / Release 编译·链接·安装退出 0；CTest 两种配置均 10/10。
+- 已验证（实机，Sven Co-op Build 10257，halflife-cli 驱动）：冷启动无地图时主菜单卡片正常渲染；
+  连续三次地图切换（abandoned → crystal → deadsimpleneo2）无崩溃，游戏内 3D、HUD 与视图模型渲染正常。
+  期间定位并修复了地图切换窗口内的 `R_DrawWorld` 崩溃（旧 DLL 不崩、新 DLL 崩；视图日志显示
+  `world=1` 打开后立即崩溃；跳过世界步骤后三次切换全部通过）。
+- 未完成：本机无 clang-format（需在 23.1.3 环境补跑格式化检查）；聚合工程与 AbcUi 本轮未复测（接口未变）。
+  实机部署：`Renderer.dll` / `Renderer_AVX2.dll` 已更新到游戏目录，原件备份为 `*.bak-pr18`。
+
+### 追加（2026-10-16 深夜）：字面 `V_RenderView` 路线的实测结论
+
+- 在维护者放开 “`R_PreRenderView`/`R_PostRenderView` 零改动” 后，按评审原文实现了 `V_RenderView` 入口：
+  视图分支接管目标 FBO、跳过阴影/水面与清屏，`R_PostRenderView` 视图直通，`R_RenderView_SvEngine`
+  为视图屏蔽 viewmodel/PolyBlend/final-flush，并放宽无世界 Sys_Error。
+- 实测（SvenCo-op Build 10257）：冷菜单（未连接、无地图）下 `V_RenderView` 直接返回、不进入
+  `R_RenderView_SvEngine`（日志仅有视图开/关、无场景渲染记录），卡片 FBO 只有清屏色——字面路线无法覆盖
+  “首次载图前可用”这一主要用例；且该路线会把引擎帧包装层（viewmodel、PolyBlend、final buffer 切换、
+  玩家相机 refdef）带进每次视图渲染。据此回滚到 `R_RenderScene` 方案（回滚后复测：冷菜单卡片正常、
+  地图切换正常、CTest 10/10）。

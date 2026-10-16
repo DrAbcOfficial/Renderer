@@ -1260,6 +1260,11 @@ std::shared_ptr<CWorldSurfaceModel> R_GenerateWorldSurfaceModel(model_t* mod)
 
 std::shared_ptr<CWorldSurfaceModel> R_GetWorldSurfaceModel(model_t* mod)
 {
+    //(*cl_worldmodel) is null while no map is loaded; an entity view runs
+    //before the first map, so a null model must not be dereferenced here.
+    if (!mod)
+        return nullptr;
+
     if (mod->type != mod_brush)
     {
         Sys_Error("R_GetWorldSurfaceModel: invalid mod type!");

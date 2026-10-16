@@ -1518,26 +1518,38 @@ void R_LoadStudioProgramStates(void)
     });
 }
 
+//The studio UBO now lives as long as the GL context does: GL_Init creates it
+//(GL_GenerateUBO), so an entity view can draw before the first map loads.
+void R_GenerateStudioUBO(void)
+{
+    if (g_hStudioUBO)
+        return;
+
+    g_hStudioUBO = GL_GenBuffer();
+    GL_UploadDataToUBODynamicDraw(g_hStudioUBO, sizeof(studio_ubo_t), nullptr);
+}
+
+void R_FreeStudioUBO(void)
+{
+    if (!g_hStudioUBO)
+        return;
+
+    GL_DeleteBuffer(g_hStudioUBO);
+    g_hStudioUBO = 0;
+}
+
 void R_ShutdownStudio(void)
 {
-    EntityView_FreeBuffers();
     g_StudioProgramTable.clear();
 
     R_StudioFlushAllSkins();
     R_FreeAllStudioRenderData();
 
-    if (g_hStudioUBO)
-    {
-        GL_DeleteBuffer(g_hStudioUBO);
-        g_hStudioUBO = 0;
-    }
+    R_FreeStudioUBO();
 }
 
 void R_InitStudio(void)
 {
-    g_hStudioUBO = GL_GenBuffer();
-    GL_UploadDataToUBODynamicDraw(g_hStudioUBO, sizeof(studio_ubo_t), nullptr);
-
     r_studio_celshade                 = gEngfuncs.pfnRegisterVariable("r_studio_celshade", "1", FCVAR_ARCHIVE | FCVAR_CLIENTDLL);
     r_studio_celshade_midpoint        = gEngfuncs.pfnRegisterVariable("r_studio_celshade_midpoint", "-0.1", FCVAR_ARCHIVE | FCVAR_CLIENTDLL);
     r_studio_celshade_softness        = gEngfuncs.pfnRegisterVariable("r_studio_celshade_softness", "0.05", FCVAR_ARCHIVE | FCVAR_CLIENTDLL);

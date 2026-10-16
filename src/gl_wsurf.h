@@ -349,6 +349,7 @@ void                                         R_BeginDetailTextureFromRenderMater
 void                                         R_EndDetailTexture(program_state_t WSurfProgramState);
 void                                         R_ShutdownWSurf(void);
 void                                         R_GenerateSceneUBO(void);
+void                                         R_FreeSceneUBO(void);
 void                                         R_SaveWSurfProgramStates(void);
 void                                         R_LoadWSurfProgramStates(void);
 void                                         R_UseWSurfProgram(program_state_t state, wsurf_program_t* progOut);

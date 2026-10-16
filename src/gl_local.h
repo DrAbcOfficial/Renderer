@@ -222,6 +222,10 @@ extern vec_t* r_playerViewportAngles;
 
 extern qboolean* scr_drawloading;
 
+//True while the engine shows a level-transition plaque. The engine does not
+//render 3D views then, and neither may an entity view.
+bool SCR_IsLoadingVisible();
+
 extern movevars_t* pmovevars;
 
 extern int*   filterMode;
@@ -418,6 +422,7 @@ void            R_AddTEntity(cl_entity_t* pEnt);
 void            R_ResetLatched_Patched(cl_entity_t* ent, qboolean full_reset);
 void            GL_Shutdown(void* window, HDC pmaindc, HGLRC pbaseRC);
 void            GL_Init(void);
+void            GL_GenerateUBO(void);
 qboolean        GL_SetMode_SvEngine(void* window, HDC* pmaindc, HGLRC* pbaseRC);
 qboolean        GL_SetMode_GoldSrc(void* window, HDC* pmaindc, HGLRC* pbaseRC, int fD3D, const char* pszDriver, const char* pszCmdLine);
 qboolean        GL_SetModeLegacy(void* window, HDC* pmaindc, HGLRC* pbaseRC, int fD3D, const char* pszDriver, const char* pszCmdLine);

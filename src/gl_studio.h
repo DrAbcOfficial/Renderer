@@ -356,6 +356,8 @@ void     R_FreeAllStudioRenderData(void);
 void     R_StudioFlushAllSkins();
 void     R_ShutdownStudio(void);
 void     R_InitStudio(void);
+void     R_GenerateStudioUBO(void);
+void     R_FreeStudioUBO(void);
 void     R_StudioStartFrame(void);
 void     R_StudioEndFrame(void);
 void     R_SaveStudioProgramStates(void);
