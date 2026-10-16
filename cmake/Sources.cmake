@@ -1,6 +1,5 @@
 # Explicit compile list from MetaHookSv Renderer.vcxproj at 11a8527.
 set(RENDERER_SOURCES
-    "src/ModelPreview.cpp"
     "${METAHOOK_SOURCE_PATH}/include/HLSDK/common/interface.cpp"
     "${METAHOOK_SOURCE_PATH}/include/SourceSDK/filesystem.cpp"
     "${METAHOOK_SOURCE_PATH}/include/SourceSDK/filesystem_helpers.cpp"
@@ -109,6 +108,7 @@ set(RENDERER_SOURCES
     "${PROJECT_SOURCE_DIR}/src/BaseUI.cpp"
     "${PROJECT_SOURCE_DIR}/src/CounterStrike.cpp"
     "${PROJECT_SOURCE_DIR}/src/EngineSurfaceHook.cpp"
+    "${PROJECT_SOURCE_DIR}/src/entity_view.cpp"
     "${PROJECT_SOURCE_DIR}/src/exportfuncs.cpp"
     "${PROJECT_SOURCE_DIR}/src/GameUI.cpp"
     "${PROJECT_SOURCE_DIR}/src/gl_cvar.cpp"

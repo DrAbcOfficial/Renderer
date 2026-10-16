@@ -324,3 +324,12 @@ Shader files are located in `assets/svencoop/renderer/shader/`:
 - Tests: sc_client_tests.cpp pins parentFBO.s_hBackBufferFBO and asserts both bindings collapse onto it; the GL_PushFrameBuffer/GL_PopFrameBuffer mocks and the framebufferStack bookkeeping were deleted. The SCClientFramebufferScope comment in gl_scclient.cpp was updated to match.
 - Verification: Plugins/Renderer/tests/run.ps1 runs all four suites green (studio_model_validation_tests, studio_model_load_tests, ringbuffer_tests, sc_client_tests). Core-context gameplay and visual comparison remain unverified.
 - Scope: Sven Windows client portal framebuffer scope only.
+
+## Entity View Scope (2026-10-16)
+
+- Trigger: `IModelPreviewRenderer`/`src/ModelPreview.cpp` implemented a complete preview feature inside the Renderer, including UI-facing policy. Replace it with a generic, lower-level API the consumer composes itself (branch `feat/studio-model-preview`).
+- Public surface: `include/Interface/IEntityViewRenderer.h` (`EntityViewRenderer_API_001`, optional; the `MetaRenderer_API_002` vtable is unchanged). `LoadStudioModel` keeps the engine filesystem validation and `GetModelData` the model data block; `entity_view_t` carries the target FBO, camera, premultiplied background and light; `BeginView`/`EndView` bracket the caller's own `IMetaRenderer::SetCurrentEntity` / `DrawCurrentEntity` calls; `HasWorld` reports the BSP state.
+- Implementation: `src/entity_view.cpp` owns `CViewScope` (scene switches, GL state, private camera/scene/dlight UBOs, camera/projection setup and the premultiplied clear); `src/entity_view.h` is the internal seam (`EntityView_IsActive` / `ApplyLight` / `Install` / `Uninstall` / `FreeBuffers`).
+- Behaviour while a view is active: `R_DrawStudioEntity` drops `STUDIO_EVENTS`, `studioapi_StudioCheckBBox` always passes, `studioapi_StudioDynamicLight` applies the view light and the engine entity-light routine is skipped (game elights stay untouched), `R_StudioDrawMesh_DrawPass` blends premultiplied for `DRAW_TEXTURED_RECT_PREMULTIPLIED_ALPHA_ENABLED` compositing, and `StudioRenderModel_Template` skips deferred/outline/hair passes. Private UBOs keep views working before the first map loads; `R_ShutdownStudio` releases them.
+- Consumer: AbcUi's `services/modelpreview` owns the card policy (source resolution, camera, light, animation, auto framing) and only uses the view scope plus `IMetaRenderer`.
+- Verification: see [build_and_verification](build_and_verification.md); runtime appearance in game remains unverified.

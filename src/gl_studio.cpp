@@ -1,5 +1,5 @@
 #include "gl_local.h"
-#include "ModelPreview.h"
+#include "entity_view.h"
 #include "studio_model_validation.h"
 #include "triangleapi.h"
 #include "mathlib2.h"
@@ -1520,7 +1520,7 @@ void R_LoadStudioProgramStates(void)
 
 void R_ShutdownStudio(void)
 {
-    modelpreview::freeBuffers();
+    EntityView_FreeBuffers();
     g_StudioProgramTable.clear();
 
     R_StudioFlushAllSkins();
@@ -3106,7 +3106,7 @@ void R_StudioDrawMesh_DrawPass(
         glUniform2f(prog.r_nearplaneclip, r_drawlowerbodyclipnear->value, r_drawlowerbodyclipfar->value);
     }
 
-    if (modelpreview::isActive())
+    if (EntityView_IsActive())
     {
         if (StudioProgramState & STUDIO_ADDITIVE_BLEND_ENABLED)
             glBlendFuncSeparate(GL_ONE, GL_ONE, GL_ZERO, GL_ONE);
@@ -3384,7 +3384,7 @@ void studioapi_RestoreRenderer(void)
 
 qboolean studioapi_StudioCheckBBox(void)
 {
-    if (modelpreview::isActive())
+    if (EntityView_IsActive())
         return true;
     if (R_IsCollectingShadowCasters())
         return true;
@@ -3505,7 +3505,7 @@ qboolean studioapi_StudioCheckBBox(void)
 
 void studioapi_StudioDynamicLight(cl_entity_t* ent, alight_t* plight)
 {
-    if (modelpreview::setupLight(plight))
+    if (EntityView_ApplyLight(plight))
         return;
     float dies[256];
 
@@ -3566,9 +3566,9 @@ __forceinline void StudioRenderFinal_Template(CallType pfnRenderFinal, void* pth
 template <typename CallType>
 __forceinline void StudioRenderModel_Template(CallType pfnRenderModel, CallType pfnRenderFinal, void* pthis = nullptr, int dummy = 0)
 {
-    if (modelpreview::isActive())
+    if (EntityView_IsActive())
     {
-        // UI previews must not schedule scene deferred/outline/hair passes.
+        // A view must not schedule scene deferred/outline/hair passes.
         pfnRenderModel(pthis, dummy);
         return;
     }

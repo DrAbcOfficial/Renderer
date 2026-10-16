@@ -133,3 +133,14 @@ permalink: renderer/build-and-verification
 
 增补 `UTILTHREADTASK_SOURCE_PATH`（2026-10-03，Release 单配置）：显式路径配置·编译·安装退出 0，CTest 4/4；
 无效显式路径在配置期 FATAL；空值 FetchContent 拉取固定提交 `8d36bef6…` 成功。Debug 未本次复测。
+
+## 2026-10-16：实体视图作用域重构（studio-model-preview 分支）
+
+- 以通用 `IEntityViewRenderer` 取代专用 `IModelPreviewRenderer` / `ModelPreview.cpp`：Renderer 不再提供完整预览功能，
+  只提供隔离视图作用域与引擎模型访问；预览组合（来源解析、相机、光照、动画、自动构图）回到 AbcUi。
+- 已验证：独立工程 Win32 Debug / Release 配置·编译·链接·安装退出 0，CTest 每种配置 10/10；
+  clang-format 23.1.3 检查 0 差异；构建产物含 `EntityViewRenderer_API_001`，不再含 `ModelPreviewRenderer001`。
+- 已验证：聚合工程 MetaHookSv 仅启用 Renderer 组件（VS2026 生成器）Debug / Release 构建退出 0，
+  产物与独立工程同尺寸。
+- 已验证：AbcUi（AbcCore 的 Renderer pin 本地签出到该提交）Debug / Release 构建退出 0，库内同样只含新接口字符串。
+- 未验证：实机运行、GL 视觉表现与在线验收（由维护者完成）。公共接口更新后必须重新配置并重跑构建与测试。

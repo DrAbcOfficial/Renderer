@@ -1,7 +1,7 @@
 #include <metahook.h>
 #include "exportfuncs.h"
 #include "gl_local.h"
-#include "ModelPreview.h"
+#include "entity_view.h"
 #include "parsemsg.h"
 #include "qgl.h"
 
@@ -43,7 +43,6 @@ static hook_t* g_phook_CL_FxBlend = NULL;
 
 void EngineStudio_UninstallHooks(void)
 {
-    modelpreview::uninstall();
     Uninstall_Hook(studioapi_GL_SetRenderMode);
     Uninstall_Hook(studioapi_SetupRenderer);
     Uninstall_Hook(studioapi_RestoreRenderer);
@@ -251,7 +250,7 @@ int HUD_GetStudioModelInterface(int version, struct r_studio_interface_s** ppint
     gPrivateFuncs.studioapi_StudioCheckBBox    = pstudio->StudioCheckBBox;
 
     EngineStudio_InstalHooks();
-    modelpreview::install(pstudio);
+    EntityView_InstallHooks(pstudio);
 
     pbonetransform  = (decltype(pbonetransform))pstudio->StudioGetBoneTransform();
     plighttransform = (decltype(plighttransform))pstudio->StudioGetLightTransform();
@@ -336,6 +335,7 @@ void HUD_Shutdown(void)
     ClientStudio_UninstallHooks();
     Client_UninstallHooks();
     EngineStudio_UninstallHooks();
+    EntityView_UninstallHooks();
 
     R_Shutdown();
 
