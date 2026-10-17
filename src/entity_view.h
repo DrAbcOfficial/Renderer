@@ -13,6 +13,12 @@ bool EntityView_IsActive();
 //Copies the light of the active view into *Light; false without a view.
 bool EntityView_ApplyLight(alight_s* Light);
 
+//Camera parameters of the active view for the scene pipeline; zero without a
+//view.
+float EntityView_GetVerticalFov();
+float EntityView_GetNearPlane();
+float EntityView_GetFarPlane();
+
 //Draws Entity through the scene pipeline while a view is active; no-op without
 //a view.
 void EntityView_DrawCurrentEntity(cl_entity_s* Entity);

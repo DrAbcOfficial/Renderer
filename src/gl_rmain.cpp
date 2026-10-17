@@ -762,11 +762,18 @@ bool R_IsHidingEntity(cl_entity_t* ent)
 
 float R_GetMainViewNearPlane()
 {
+    //A view supplies its own camera planes; the main view keeps the cvars.
+    if (EntityView_IsActive())
+        return EntityView_GetNearPlane();
+
     return gl_nearplane->value;
 }
 
 float R_GetMainViewFarPlane()
 {
+    if (EntityView_IsActive())
+        return EntityView_GetFarPlane();
+
     return pmovevars->zmax; // (r_params.movevars ? r_params.movevars->zmax : 4096);
 }
 
@@ -4283,13 +4290,15 @@ void R_SetupGL(void)
 
         R_LoadIdentityForProjectionMatrix();
 
-        if ((int)r_vertical_fov->value > 0)
+        //A view always supplies its fov in degrees of vertical fov, so it
+        //takes the vertical branch regardless of r_vertical_fov.
+        if ((int)r_vertical_fov->value > 0 || EntityView_IsActive())
         {
             auto height = (double)(*r_refdef.vrect).height;
             auto width  = (double)(*r_refdef.vrect).width;
             auto aspect = height / width;
 
-            auto fov = (*scr_fov_value);
+            auto fov = EntityView_IsActive() ? EntityView_GetVerticalFov() : (*scr_fov_value);
 
             if (fov < 1.0f || fov > 179.0f)
                 fov = 90.0f;
@@ -4465,9 +4474,9 @@ void R_SetupFrame(void)
 
 void R_MarkLeaves(void)
 {
-    //Without a world there is no PVS to mark (an entity view before the first
-    //map renders its entity only).
-    if (!(*cl_worldmodel))
+    //A view holds one entity and no world: there is no PVS to mark, and the
+    //world may be mid-replacement while the view runs.
+    if (EntityView_IsActive() || !(*cl_worldmodel))
         return;
 
     if ((*r_oldviewleaf) == (*r_viewleaf) && !r_novis->value)
@@ -4696,8 +4705,6 @@ void ClientDLL_DrawNormalTriangles(void)
 
 void R_RenderScene(void)
 {
-    const bool bView = EntityView_IsActive();
-
     GL_BeginDebugGroup("R_RenderScene");
 
     if (CL_IsDevOverviewMode())
@@ -4706,12 +4713,7 @@ void R_RenderScene(void)
     R_SetupFrame();
     R_SetupGL();
     R_SetFrustum();
-
-    //A view draws no world, so it neither marks world leaves nor draws the
-    //world model: both read world data that a level transition may be
-    //replacing while the view runs.
-    if (!bView)
-        R_MarkLeaves();
+    R_MarkLeaves();
 
     R_BeginRenderGBuffer();
 
@@ -4719,9 +4721,7 @@ void R_RenderScene(void)
 
     if (!(*r_refdef.onlyClientDraws))
     {
-        if (!bView)
-            R_DrawWorld();
-
+        R_DrawWorld();
         R_DrawEntitiesOnList();
     }
 

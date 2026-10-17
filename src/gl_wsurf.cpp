@@ -1,4 +1,5 @@
 #include "gl_local.h"
+#include "entity_view.h"
 
 #include <sstream>
 #include <algorithm>
@@ -5267,6 +5268,11 @@ void R_PrepareDrawWorld(void)
 
 void R_DrawWorld(void)
 {
+    //A view draws its entity only; the world model (and its lazily built
+    //surface data) stays out of it.
+    if (EntityView_IsActive())
+        return;
+
     r_draw_opaque = true;
 
     const float r_identity_matrix[4][4] = {

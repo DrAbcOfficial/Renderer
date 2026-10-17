@@ -18,10 +18,8 @@
 namespace
 {
 
-//"IDST": the id field of a Studio header. kHalfDegreeToRadians converts the
-//half vertical fov to radians (VerticalFov * kHalfDegreeToRadians).
-constexpr int   kStudioHeaderId      = 0x54534449;
-constexpr float kHalfDegreeToRadians = 0.00872664626f;
+//"IDST": the id field of a Studio header.
+constexpr int kStudioHeaderId = 0x54534449;
 
 /*
     One view. Begin() turns the caller's target into the current scene FBO,
@@ -47,8 +45,24 @@ public:
     //Copies the light of the active view into *Light.
     bool ApplyLight(alight_t* Light);
 
-    //(Re)installs the view camera, the target viewport, the refdef rectangle
-    //and the scene switches the view needs.
+    //Camera inputs the scene pipeline reads while a view is active.
+    float VerticalFov() const
+    {
+        return bBegun ? View.verticalFov : 0.0f;
+    }
+
+    float NearPlane() const
+    {
+        return bBegun ? View.nearPlane : 0.0f;
+    }
+
+    float FarPlane() const
+    {
+        return bBegun ? View.farPlane : 0.0f;
+    }
+
+    //Installs the view's refdef (rectangle, origin, angles) and the scene
+    //switches the view needs; R_SetupGL derives the camera from them.
     void ApplyCamera();
 
 private:
@@ -242,14 +256,6 @@ void CViewScope::EndCallerState()
 
 void CViewScope::ApplyCamera()
 {
-    //The view owns the target's viewport and rectangle; the frame's own
-    //viewport is restored in End().
-    r_viewport[0] = 0;
-    r_viewport[1] = 0;
-    r_viewport[2] = float(View.target->iWidth);
-    r_viewport[3] = float(View.target->iHeight);
-    R_SetViewport(0, 0, float(View.target->iWidth), float(View.target->iHeight));
-
     (*r_refdef.vrect).x      = 0;
     (*r_refdef.vrect).y      = 0;
     (*r_refdef.vrect).width  = View.target->iWidth;
@@ -258,36 +264,18 @@ void CViewScope::ApplyCamera()
     //The scene pipeline reads this flag before it draws world and entities.
     (*r_refdef.onlyClientDraws) = false;
 
+    //R_SetupGL installs the camera, the viewport and the projection from these
+    //values and the fov / plane inputs EntityView exposes to it.
     VectorCopy(View.origin, *r_refdef.vieworg);
     VectorCopy(View.angles, *r_refdef.viewangles);
     R_UpdateRefDef();
-    R_LoadIdentityForWorldMatrix();
-    R_SetupPlayerViewWorldMatrix(View.origin, View.angles);
 
-    const float Aspect     = float(View.target->iWidth) / float(View.target->iHeight);
-    const float HalfHeight = View.nearPlane * tanf(View.verticalFov * kHalfDegreeToRadians);
+    //A view is a single view; the frame's own multiview state is restored in
+    //End().
+    r_draw_multiview = false;
 
-    R_LoadIdentityForProjectionMatrix();
-    R_SetupFrustumProjectionMatrix(-HalfHeight * Aspect, HalfHeight * Aspect,
-                                   -HalfHeight, HalfHeight, View.nearPlane, View.farPlane);
-
-    //R_SetupGL skips its own camera setup for multiview, so the shared camera
-    //UBO is the camera every camera-reading program uses for this view.
-    camera_ubo_t Camera{};
-
-    R_SetupCameraView(&Camera.views[0]);
-    InvertMatrix(&Camera.views[0].worldMatrix[0][0], &Camera.views[0].invWorldMatrix[0][0]);
-    InvertMatrix(&Camera.views[0].projMatrix[0][0], &Camera.views[0].invProjMatrix[0][0]);
-    Camera.views[0].vright_znear[3] = View.nearPlane;
-    Camera.views[0].vup_zfar[3]     = View.farPlane;
-    Camera.numViews                 = 1;
-
-    R_UploadCameraUBOData(&Camera);
-
-    //The view draws like a shadow view: R_SetupGL keeps the camera the view
-    //built, gamma-blend programs write the RGBA8 target the caller samples
-    //directly, and the world stays out of the visible-entity list.
-    r_draw_multiview  = true;
+    //Gamma-blend programs write the RGBA8 target the caller samples directly,
+    //and the world stays out of the visible-entity list.
     r_draw_gammablend = true;
     r_draw_classify   = DRAW_CLASSIFY_OPAQUE_ENTITIES | DRAW_CLASSIFY_TRANS_ENTITIES;
 }
@@ -395,6 +383,21 @@ bool EntityView_IsActive()
 bool EntityView_ApplyLight(alight_t* Light)
 {
     return ViewScope.ApplyLight(Light);
+}
+
+float EntityView_GetVerticalFov()
+{
+    return ViewScope.VerticalFov();
+}
+
+float EntityView_GetNearPlane()
+{
+    return ViewScope.NearPlane();
+}
+
+float EntityView_GetFarPlane()
+{
+    return ViewScope.FarPlane();
 }
 
 void EntityView_DrawCurrentEntity(cl_entity_s* Entity)
